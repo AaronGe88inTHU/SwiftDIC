@@ -44,8 +44,24 @@ final class SwiftDICTests: XCTestCase {
                              1.9377,   -0.0621,    2.9583,   -2.7504  ,  0.9394,   -2.6559  ,  2.3987 ,  -0.4473,
                              0.5555,    1.4899,    0.1035 ,   2.8358  ,  0.3457,    2.6469  ,  0.4168  ,  1.6953,
                              1.1740,    0.8451,   1.2515,    0.4647   , 0.2520,    0.3399 ,   1.2308 ,   0.6947]
-        let expectedMatrix = Matrix(rows: 8, columns: 8, grid: expected)
-        let bCoefMap = interpolatedMatrix.bSplineCoefMap
+        
+        var expectedMatrix = Matrix(rows: 8, columns: 8, grid: expected)
+//        expected = Matrix.qk * expectedMatrix * transpose(Matrix.qk)
+        
+        var expectedQkcqkT = GeneralMatrix<Matrix<Float>>(rows: expectedMatrix.rows,
+                                                 columns: expectedMatrix.columns,
+                                                 elements: .init(repeating: .init(rows: 6, columns: 6, repeatedValue: 0.0), count: expectedMatrix.rows*expectedMatrix.columns))
+        
+        let rows = (2 ..< expectedQkcqkT.rows-3).map {$0}
+        let columns = (2 ..< expectedQkcqkT.columns-3).map{$0}
+        let qk = Matrix<Float>.qk
+        let qkt = transpose(qk)
+        for (y, x) in product(rows, columns){
+            expectedQkcqkT[y, x] = (qk * expectedMatrix[(y-2 ... y+3), (x-2 ... x+3)] * qkt)
+        }
+        
+        
+        let qkCqkt = interpolatedMatrix.qkCqkt()
         
         
         var subPixs = Matrix<Float>(rows: 3, columns: 3, repeatedValue: 0)
@@ -53,14 +69,18 @@ final class SwiftDICTests: XCTestCase {
         for (rowInGlobal, columnInGlobal) in product((2 ... 4), (2 ... 4)){
             let row = rowInGlobal - 2
             let column = columnInGlobal - 2
-            subPixs[row, column] = SubPixel(Float(rowInGlobal), Float(columnInGlobal), bCoefMap: bCoefMap).value
+            subPixs[row, column] = SubPixel(Float(rowInGlobal), Float(columnInGlobal), qkCqktMap: qkCqkt).value
         }
         
         
-        let subPix22 = SubPixel(2.001,2.001, bCoefMap: bCoefMap)
-        let subPix55 = SubPixel(4.999, 4.999, bCoefMap: bCoefMap)
+        let subPix22 = SubPixel(2.001,2.001, qkCqktMap: qkCqkt)
+        let subPix55 = SubPixel(4.999, 4.999, qkCqktMap: qkCqkt)
         
-        XCTAssertEqual2D(expectedMatrix, bCoefMap, accuracy: 1e-3)
+        for (y, x) in product(0..<expectedMatrix.rows, 0..<expectedMatrix.columns){
+            XCTAssertEqual2D(expectedQkcqkT[y, x], qkCqkt[y, x], accuracy: 1e-3)
+            
+        }
+
         XCTAssertEqual2D(matrix[(2 ... 4), (2...4)], subPixs, accuracy: 1e-5)
         XCTAssertEqual(subPix22.value, matrix[2,2], accuracy: 1e-3)
         XCTAssertEqual(subPix55.value, matrix[5,5], accuracy: 1e-3)
@@ -76,31 +96,31 @@ final class SwiftDICTests: XCTestCase {
         matrix[row: 7] = [1,1,1, 0.92,0.71,0.87,1,1]
         
         let interpolatedMatrix = InterpolatedMap(gs: matrix)
-        let bCoefMap = interpolatedMatrix.bSplineCoefMap
+        let qkCqkt = interpolatedMatrix.qkCqkt()
         
-        var subset = ElementMatrix(rows: 3, columns: 3, subPixs: .init(repeating: SubPixel(), count: 3*3))
-        
+        var subset = GeneralMatrix<SubPixel>(rows: 3, columns: 3, elements: .init(repeating: SubPixel(), count: 3*3))
+
         for (rowInGlobal, columnInGlobal) in product((2 ... 4).map{Float($0)}.indexed(),
                                                      (2 ... 4).map{Float($0)}.indexed()){
             subset[rowInGlobal.index, columnInGlobal.index] = SubPixel(rowInGlobal.element,
                                                                        columnInGlobal.element,
-                                                                       bCoefMap: bCoefMap)
+                                                                       qkCqktMap: qkCqkt)
         }
-        
+//
         let dvdx: Matrix<Float>? = subset.dvdx
         let dvdy: Matrix<Float>? = subset.dvdx
-        
+//
         XCTAssertNotNil(dvdx)
         XCTAssertNotNil(dvdy)
-        
-        XCTAssertEqual2D(matrix[(2 ... 4), (2...4)], subset.values, accuracy: 1e-5)
-        
-        subset[1, 1] = SubPixel(2.1, 2.1, bCoefMap: bCoefMap)
-        
+//
+        XCTAssertEqual2D(matrix[(2 ... 4), (2...4)], subset.values(), accuracy: 1e-5)
+
+        subset[1, 1] = SubPixel(2.1, 2.1, qkCqktMap: qkCqkt)
+
         let dvdxnil: Matrix<Float>? = subset.dvdx
         let dvdynil: Matrix<Float>? = subset.dvdx
-        
-      
+
+
         XCTAssertNil(dvdxnil)
         XCTAssertNil(dvdynil)
         
@@ -110,7 +130,7 @@ final class SwiftDICTests: XCTestCase {
     
     func test_padding() throws{
         
-        let matrix = Matrix<Float>(rows: 720, columns: 1080, repeatedValue: 0)
+        let matrix = Matrix<Float>(rows: 400, columns: 1040, repeatedValue: 0)
         
         let paddedMatrix = matrix.paddingToFttable()
         XCTAssertTrue(paddedMatrix.isFftable())
@@ -120,8 +140,8 @@ final class SwiftDICTests: XCTestCase {
 
     
     func test_configProject() throws{
-        let reference = Matrix<Float>(rows: 720, columns: 1080, repeatedValue: 0)
-        let currents = (0 ... 20).map {Matrix(rows: 720, columns: 1080, repeatedValue: Float($0))}
+        let reference = Matrix<Float>(rows: 1040, columns: 400, repeatedValue: 0)
+        let currents = (0 ... 20).map {Matrix(rows: 1040, columns: 400, repeatedValue: Float($0))}
         let project = DICProject(reference: reference, currents: currents)
         
         

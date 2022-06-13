@@ -7,7 +7,7 @@
 
 import Surge
 
-extension ElementMatrix where Element == SubPixel{
+extension GeneralMatrix where Element == SubPixel{
     
     func values() -> Matrix<Float>{
         .init(rows: rows, columns: columns, grid: elements.map{$0.value})

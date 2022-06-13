@@ -22,7 +22,7 @@ struct SubPixel : DefaultInitializable{
         self.value = 0
     }
     
-    init(_ row: Float, _ column: Float, qkCqktMap: Matrix<Float>)
+    init(_ row: Float, _ column: Float, qkCqktMap: GeneralMatrix<Matrix<Float>>)
     {
         // y, x represents row, column
         if !(row >= 2 && (Int(floor(row))+3) <= qkCqktMap.rows){
@@ -40,8 +40,10 @@ struct SubPixel : DefaultInitializable{
         
         
         //calculate subPix
-        let localCoef = qkCqktMap[( Int(floor(y))-2 ... Int(floor(y))+3),
-                                  (Int(floor(x))-2 ... Int(floor(x))+3)]
+//        let localCoef = qkCqktMap[( Int(floor(y))-2 ... Int(floor(y))+3),
+//                                  (Int(floor(x))-2 ... Int(floor(x))+3)]
+        let localCoef = qkCqktMap [Int(floor(y)), Int(floor(x))]
+        
         //
         let dx = x - floor(x)
         let dy = y - floor(y)

@@ -13,11 +13,11 @@ class DICProject{
     var reference: Matrix<Float>? = nil
     var currents: [Matrix<Float>]? = nil
     
-    var referenceMap: Matrix<Float>? = nil
-    var currentMaps : [Matrix<Float>]? = nil
+    var referenceMap: GeneralMatrix<Matrix<Float>>? = nil
+    var currentMap : GeneralMatrix<Matrix<Float>>? = nil
     
-    var referenceInSubPixels: ElementMatrix<SubPixel>? = nil
-    var currentsInSubPixels: [ElementMatrix<SubPixel>]? = nil
+    var referenceInSubPixels: GeneralMatrix<SubPixel>? = nil
+    var currentInSubPixels: GeneralMatrix<SubPixel>? = nil
     
     var dfdxRef: Matrix<Float>? = nil
     var dfdyRef: Matrix<Float>? = nil
@@ -31,7 +31,7 @@ class DICProject{
     
 
     var roiPoints: [(y:Int, x:Int)]?=nil
-    var roiSubsets: [ElementMatrix<SubPixel>]?=nil
+    var roiSubsets: [GeneralMatrix<SubPixel>]?=nil
     
     
     public init(reference: Matrix<Float>?=nil,
@@ -60,18 +60,10 @@ class DICProject{
         
         try paddingToFftable()
         
-        try subset_generate(bottom: 700, right: 1000)
+        try subset_generate(bottom: reference!.rows-3, right: reference!.columns-3)
         
-//        print(roiSubsets!)
-        
-        
-//        try preComputerRef()
-//        print(roiPoints)
-        
+        try preComputerRef()
 
-        
-//
-//        referenceInSubPixels = SubPixelMatrix(rows: rows, columns: columns)
 
     }
     
@@ -88,42 +80,14 @@ class DICProject{
         }
         
         if reference!.isFftable(){
-            referenceMap = InterpolatedMap(gs: reference!).bSplineCoefMap
-//            currentMaps = currents!.map{InterpolatedMap(gs:$0).bSplineCoefMap}
+            referenceMap = InterpolatedMap(gs: reference!).qkCqkt()
         }
         else{
-            referenceMap = InterpolatedMap(gs: reference!.paddingToFttable()).bSplineCoefMap
-//            currentMaps = currents!.map{InterpolatedMap(gs:$0.paddingToFttable()).bSplineCoefMap}
+            referenceMap = InterpolatedMap(gs: reference!.paddingToFttable()).qkCqkt()
         }
         
     }
     
-    private func preComputerRef() throws{
-       
-        let rows = reference!.rows
-        let columns = reference!.columns
-        
-        dfdxRef = Matrix<Float>(rows: rows, columns: columns, repeatedValue: 0)
-        dfdyRef = Matrix<Float>(rows: rows, columns: columns, repeatedValue: 0)
-
-        let qk: Matrix<Float> = Matrix.qk
-        let qkt = transpose(qk)
-
-        let nd = Matrix<Float>(row: [1, 0, 0 ,0 ,0 ,0])
-        let dd = Matrix<Float>(column: [0, 1, 0, 0 ,0 ,0])
-        
-        //
-//        let localCoefs =
-        //TODO: structure concurrency
-        for (row, column) in product( 2 ..< rows-3, 2 ..< columns-3){
-            let localCoef = referenceMap![row-2 ... row+3,
-                                                         column-2 ... column+3]
-//            print(row, column)
-            let qkCqtk = qk * localCoef * qkt
-            dfdyRef![row, column] = (transpose(dd) * qkCqtk * transpose(nd))[0,0]
-            dfdxRef![row, column] = (nd * qkCqtk * dd)[0,0]
-        }
-    }
     
     private func subset_generate(top: Int=2, left: Int=2, bottom: Int, right: Int) throws{
         precondition(bottom < reference!.rows && right < reference!.columns)
@@ -163,7 +127,41 @@ class DICProject{
                 //TODO: error
                 subPixels[iy*configure.subSize+ix] = SubPixel(Float(y), Float(x), qkCqktMap: referenceMap!)
             }
-            return ElementMatrix<SubPixel>(rows: configure.subSize, columns: configure.subSize, elements:subPixels)
+            return GeneralMatrix<SubPixel>(rows: configure.subSize, columns: configure.subSize, elements:subPixels)
+        }
+    }
+    
+    private func preComputerRef() throws{
+       
+        let rows = reference!.rows
+        let columns = reference!.columns
+        
+        dfdxRef = Matrix<Float>(rows: rows, columns: columns, repeatedValue: 0)
+        dfdyRef = Matrix<Float>(rows: rows, columns: columns, repeatedValue: 0)
+
+//        let qk: Matrix<Float> = Matrix.qk
+//        let qkt = transpose(qk)
+
+        let nd = Matrix<Float>(row: [1, 0, 0 ,0 ,0 ,0])
+        let dd = Matrix<Float>(column: [0, 1, 0, 0 ,0 ,0])
+        
+        //
+//        let localCoefs =
+        //TODO: structure concurrency
+        for (row, column) in product( 2 ..< rows-3, 2 ..< columns-3){
+            let localCoef = referenceMap![row, column]
+            dfdyRef![row, column] = (transpose(dd) * localCoef * transpose(nd))[0,0]
+            dfdxRef![row, column] = (nd * localCoef * dd)[0,0]
+        }
+    }
+    
+    public func compute(index: Int){
+        if reference!.isFftable(){
+            currentMap = InterpolatedMap(gs: currents![index]).qkCqkt()
+//            currentMaps = currents!.map{InterpolatedMap(gs:$0).bSplineCoefMap}
+        }
+        else{
+            currentMap = InterpolatedMap(gs: currents![index].paddingToFttable()).qkCqkt()
         }
     }
     

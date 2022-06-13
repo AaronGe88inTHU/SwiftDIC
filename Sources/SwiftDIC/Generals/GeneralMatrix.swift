@@ -12,7 +12,7 @@ public protocol DefaultInitializable {
     init()
 }
 
-struct ElementMatrix<Element> where Element: DefaultInitializable{
+struct GeneralMatrix<Element> where Element: DefaultInitializable{
  
     public let rows: Int
     public let columns: Int
@@ -34,10 +34,10 @@ struct ElementMatrix<Element> where Element: DefaultInitializable{
 
 }
 
-extension ElementMatrix {
+extension GeneralMatrix {
     // MARK: - Subscript
 
-    public subscript(row: Int, column: Int) -> Element {
+    public subscript(_ row: Int, _ column: Int) -> Element {
         get {
             assert(indexIsValidForRow(row, column: column))
             return elements[(row * columns) + column]
@@ -86,7 +86,7 @@ extension ElementMatrix {
         }
     }
     
-    public subscript(row: ClosedRange<Int>, column: ClosedRange<Int>) -> ElementMatrix {
+    public subscript(row: ClosedRange<Int>, column: ClosedRange<Int>) -> GeneralMatrix {
         get {
             assert(row.map{$0 < rows && $0 >= 0}.allSatisfy{$0 == true})
             assert(column.map{$0 < columns && $0 >= 0}.allSatisfy{$0 == true})
@@ -101,7 +101,7 @@ extension ElementMatrix {
                 result[(rr-r0)*subColumns ..< (rr-r0)*subColumns+subColumns] = elements[rr*columns+c0 ..< rr*columns+c0+subColumns]
 //                }
             }
-            return ElementMatrix(rows: subRows, columns: subColumns, elements: result)
+            return GeneralMatrix(rows: subRows, columns: subColumns, elements: result)
         }
 
         set {

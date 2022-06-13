@@ -31,15 +31,16 @@ struct InterpolatedMap{
         
         precondition(row >= 5 && column >= 5)
         
-        precondition(row.isPower(of: 2) ? true : (row.isMultiple(of: 15) ? ((row/15).isPower(of: 2) || ((row/5).isPower(of: 2) || ((row/3).isPower(of: 2)))) : row.isMultiple(of: 5) ? ((row/5).isPower(of: 2)) : (row.isMultiple(of: 3) && (row/3).isPower(of: 2))))
-        precondition(column.isPower(of: 2) ? true : (column.isMultiple(of: 15) ? ((column/15).isPower(of: 2) || ((column/5).isPower(of: 2) || ((column/3).isPower(of: 2)))) : column.isMultiple(of: 5) ? ((column/5).isPower(of: 2)) : (column.isMultiple(of: 3) && (column/3).isPower(of: 2))))
+//        precondition(row.isPower(of: 2) ? true : (row.isMultiple(of: 15) ? ((row/15).isPower(of: 2) || ((row/5).isPower(of: 2) || ((row/3).isPower(of: 2)))) : row.isMultiple(of: 5) ? ((row/5).isPower(of: 2)) : (row.isMultiple(of: 3) && (row/3).isPower(of: 2))))
+//        precondition(column.isPower(of: 2) ? true : (column.isMultiple(of: 15) ? ((column/15).isPower(of: 2) || ((column/5).isPower(of: 2) || ((column/3).isPower(of: 2)))) : column.isMultiple(of: 5) ? ((column/5).isPower(of: 2)) : (column.isMultiple(of: 3) && (column/3).isPower(of: 2))))
+        precondition(gs.isFftable())
         
         self.gs = gs
     }
     
     
     
-    public var bSplineCoefMap: Matrix<Float> {
+    private func bSplineCoefMap() -> Matrix<Float> {
         let width = gs.columns
         let height = gs.rows
 
@@ -124,7 +125,7 @@ struct InterpolatedMap{
 
        
         
-        for ii in 0 ..< height{
+        for ii in 0 ..< width{
   
             let column = coef[column: ii]
    
@@ -174,16 +175,17 @@ struct InterpolatedMap{
 
     }
     
-    public var qkCqkt: ElementMatrix<Matrix<Float>>{
-        var qkCqk = ElementMatrix<Matrix<Float>>(rows: gs.rows,
+    public func qkCqkt() -> GeneralMatrix<Matrix<Float>>{
+        var qkCqk = GeneralMatrix<Matrix<Float>>(rows: gs.rows,
                                                  columns: gs.columns,
                                                  elements: .init(repeating: .init(rows: 6, columns: 6, repeatedValue: 0.0), count: gs.rows*gs.columns))
-        let rows = (2 ..< qkCqk.rows-2).map {$0}
-        let columns = (2 ..< qkCqk.columns-2).map{$0}
+        let rows = (2 ..< qkCqk.rows-3).map {$0}
+        let columns = (2 ..< qkCqk.columns-3).map{$0}
         let qk = Matrix<Float>.qk
         let qkt = transpose(qk)
+        let bmap = bSplineCoefMap()
         for (y, x) in product(rows, columns){
-            qkCqk[y, x] = (qk * bSplineCoefMap[(y-2 ... y+3), (x-2 ... x+3)] * qkt)
+            qkCqk[y, x] = (qk * bmap[(y-2 ... y+3), (x-2 ... x+3)] * qkt)
         }
         
         return qkCqk

@@ -8,21 +8,29 @@
 import Surge
 import Algorithms
 
-extension Matrix<Float> : DefaultInitializable {
+extension Matrix: DefaultInitializable where Scalar == Float{
     public init()
     {
         
-        self.init(arrayLiteral: [0.0])
+        self.init(arrayLiteral: [Scalar(0.0)])
         
     }
 }
 
-extension Matrix<Double> : DefaultInitializable {
-    public init()
-    {
-        
-        self.init(arrayLiteral: [0.0])
-        
-    }
-}
-
+//extension Matrix: DefaultInitializable where Scalar == Double{
+//    public init()
+//    {
+//
+//        self.init(arrayLiteral: [Scalar(0.0)])
+//
+//    }
+//}
+//
+//extension Matrix: DefaultInitializable where Scalar == Double {
+//    public init()
+//    {
+//        self.init(arrayLiteral: [0.0])
+//
+//    }
+//}
+//
