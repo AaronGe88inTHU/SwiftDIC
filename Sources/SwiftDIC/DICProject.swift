@@ -8,6 +8,7 @@
 import Surge
 import Algorithms
 
+
 @available(macOS 12.0, *)
 class DICProject{
     var reference: Matrix<Float>? = nil
@@ -29,7 +30,7 @@ class DICProject{
     var centerAvailableColumns: ClosedRange<Int>? = nil
     
     
-
+    
     var roiPoints: [(y:Int, x:Int)]?=nil
     var roiSubsets: [GeneralMatrix<SubPixel>]?=nil
     
@@ -43,7 +44,7 @@ class DICProject{
         if currents != nil{
             precondition(Set(currents!.map {$0.rows}).count == 1 &&
                          Set(currents!.map{$0.columns}).count == 1)
-           
+            
             
             if reference != nil{
                 precondition(reference!.rows == currents!.first!.rows)
@@ -62,9 +63,9 @@ class DICProject{
         
         try subset_generate(bottom: reference!.rows-3, right: reference!.columns-3)
         
-        try preComputerRef()
-
-
+//        try preComputerRef()
+        
+        
     }
     
     private func paddingToFftable() throws
@@ -83,7 +84,7 @@ class DICProject{
             referenceMap = InterpolatedMap(gs: reference!).qkCqkt()
         }
         else{
-            referenceMap = InterpolatedMap(gs: reference!.paddingToFttable()).qkCqkt()
+            referenceMap = InterpolatedMap(gs: reference!.paddingToFttable()).qkCqkt()[0...reference!.rows-1, 0...reference!.columns-1]
         }
         
     }
@@ -122,8 +123,8 @@ class DICProject{
         //TODO: structure concurrency
         roiSubsets = roiPoints!.map{
             var subPixels = [SubPixel](repeating: SubPixel(), count: configure.subSize*configure.subSize)
-            for ((iy, y), (ix, x)) in product(($0.0-20...$0.0+20).map{v in v}.indexed(),
-                                              ($0.1-20...$0.1+20).map{v in v}.indexed()){
+            for ((iy, y), (ix, x)) in product(($0.0-halfSize...$0.0+halfSize).map{v in v}.indexed(),
+                                              ($0.1-halfSize...$0.1+halfSize).map{v in v}.indexed()){
                 //TODO: error
                 subPixels[iy*configure.subSize+ix] = SubPixel(Float(y), Float(x), qkCqktMap: referenceMap!)
             }
@@ -131,38 +132,126 @@ class DICProject{
         }
     }
     
-    private func preComputerRef() throws{
-       
+    func preComputerRef() throws{
+        
         let rows = reference!.rows
         let columns = reference!.columns
         
         dfdxRef = Matrix<Float>(rows: rows, columns: columns, repeatedValue: 0)
         dfdyRef = Matrix<Float>(rows: rows, columns: columns, repeatedValue: 0)
-
-//        let qk: Matrix<Float> = Matrix.qk
-//        let qkt = transpose(qk)
-
+    
         let nd = Matrix<Float>(row: [1, 0, 0 ,0 ,0 ,0])
         let dd = Matrix<Float>(column: [0, 1, 0, 0 ,0 ,0])
         
-        //
-//        let localCoefs =
         //TODO: structure concurrency
         for (row, column) in product( 2 ..< rows-3, 2 ..< columns-3){
             let localCoef = referenceMap![row, column]
             dfdyRef![row, column] = (transpose(dd) * localCoef * transpose(nd))[0,0]
             dfdxRef![row, column] = (nd * localCoef * dd)[0,0]
         }
+        
+        
+        ///parameters [u, v, du/dx, du/dy, dv/dx, dv/dy]
+        ///
+        var refRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdyRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdxRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdudxRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdudyRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdvdxRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdvdyRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var hessanRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        
+        
+        for ii in 0 ..< roiPoints!.count{
+            let center = roiPoints![ii]
+            let subset = roiSubsets![ii]
+            guard subset.isIntSubset
+            else{
+                throw fatalError("reference is not a Int subset")
+            }
+            let halfSize = configure.subSize / 2
+            refRoi[ii] = reference![Int(center.y)-halfSize ... Int(center.y)+halfSize, Int(center.x)-halfSize ... Int(center.x)+halfSize]
+            
+            let ys = subset.ys
+            let xs = subset.xs
+            let dy = ys - Float(center.y)
+            let dx = xs - Float(center.x)
+            
+            
+            let dfdyArray = subset.elements.map {dfdyRef![Int($0.y), Int($0.x)]}
+            let dfdy =  Matrix<Float>(rows: configure.subSize, columns: configure.subSize, grid: dfdyArray )
+            dfdyRoi[ii] = dfdy
+            
+            let dfdxArray = subset.elements.map {dfdxRef![Int($0.y), Int($0.x)]}
+            let dfdx = Matrix<Float>(rows: configure.subSize, columns: configure.subSize, grid: dfdxArray )
+            dfdxRoi[ii] = dfdx
+      
+            dfdudyRoi[ii] = dfdx * dy
+            dfdudxRoi[ii] = dfdx * dx
+            
+            dfdvdyRoi[ii] = dfdy * dy
+            dfdvdxRoi[ii] = dfdy * dx
+            
+            
+            
+        }
+        
+        for ii in 0 ..< hessanRoi.count{
+            
+            var hessianValue : Matrix<Float> = .init(rows: 6, columns: 6, repeatedValue: 0.0)
+            for (row, column) in product(0..<configure.subSize, 0..<configure.subSize){
+                let p  =  Matrix<Float>(row: [dfdxRoi[ii][row, column],
+                                              dfdyRoi[ii][row, column],
+                                              dfdudxRoi[ii][row, column],
+                                              dfdudyRoi[ii][row, column],
+                                              dfdvdxRoi[ii][row, column],
+                                              dfdvdyRoi[ii][row, column]])
+                
+                let ppt = transpose(p) * p
+//                if ppt.isPositiveDefined(){
+//                if !ppt.isPositiveDefined(){
+//                    print (false)
+//                }
+                hessianValue += ppt
+//                }
+        
+                
+            }
+            print(try eigenDecompose(hessianValue).eigenValues)
+
+            hessanRoi[ii] = hessianValue * 2 / refRoi[ii].variant()
+            
+            
+            let l = try choleskyDecomposition(hessanRoi[ii])
+            print(l)
+            
+        }
+    
+        
+        
+        
+        
+        
+        
+        
     }
     
     public func compute(index: Int){
         if reference!.isFftable(){
             currentMap = InterpolatedMap(gs: currents![index]).qkCqkt()
-//            currentMaps = currents!.map{InterpolatedMap(gs:$0).bSplineCoefMap}
+            //            currentMaps = currents!.map{InterpolatedMap(gs:$0).bSplineCoefMap}
         }
         else{
-            currentMap = InterpolatedMap(gs: currents![index].paddingToFttable()).qkCqkt()
+            currentMap = InterpolatedMap(gs: currents![index].paddingToFttable()).qkCqkt()[0...reference!.rows-1, 0...reference!.columns-1]
         }
+    }
+    
+    
+    
+    public func iterativeSearch(){
+//        var fm: Float = 0.0
+        
     }
     
 }

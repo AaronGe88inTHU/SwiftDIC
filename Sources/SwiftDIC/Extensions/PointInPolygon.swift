@@ -197,7 +197,7 @@ public class Polygon {
     private var segments: [LineSegment] {
         var array: [LineSegment] = []
         for point in points {
-            if let index = points.index(of: point) {
+            if let index = points.firstIndex(of: point) {
                 let startPoint = points[index]
                 if index.advanced(by: 1) == points.count {
                     if let first = points.first {

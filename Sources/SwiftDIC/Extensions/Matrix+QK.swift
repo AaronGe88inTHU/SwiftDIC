@@ -19,17 +19,3 @@ extension Matrix {
         return Matrix(rows: 6, columns: 6, grid: grid)
     }
 }
-
-//extension Matrix where Scalar == Double {
-//    public var QK () -> Matrix
-//    {
-//        let grid: [Double] = [1/120, 13/60, 11/20, 13/60, 1/120, 0,
-//                              -1/24, -5/12, 0, 5/12, 1/24, 0,
-//                              1/12, 1/6, -1/2, 1/6, 1/12, 0,
-//                              -1/12, 1/6, 0, -1/6, 1/12, 0,
-//                              1/24, -1/6, 1/4, -1/6, 1/24, 0,
-//                              -1/120, 1/24, -1/12, 1/12, -1/24, 1/120]
-//        return Matrix(rows: 6, columns: 6, grid: grid)
-//    }
-//}
-

@@ -8,7 +8,6 @@
 import Foundation
 import Surge
 import Accelerate
-import SE0288_IsPower
 import ComplexModule
 import Algorithms
 
@@ -31,8 +30,7 @@ struct InterpolatedMap{
         
         precondition(row >= 5 && column >= 5)
         
-//        precondition(row.isPower(of: 2) ? true : (row.isMultiple(of: 15) ? ((row/15).isPower(of: 2) || ((row/5).isPower(of: 2) || ((row/3).isPower(of: 2)))) : row.isMultiple(of: 5) ? ((row/5).isPower(of: 2)) : (row.isMultiple(of: 3) && (row/3).isPower(of: 2))))
-//        precondition(column.isPower(of: 2) ? true : (column.isMultiple(of: 15) ? ((column/15).isPower(of: 2) || ((column/5).isPower(of: 2) || ((column/3).isPower(of: 2)))) : column.isMultiple(of: 5) ? ((column/5).isPower(of: 2)) : (column.isMultiple(of: 3) && (column/3).isPower(of: 2))))
+        
         precondition(gs.isFftable())
         
         self.gs = gs
@@ -67,21 +65,13 @@ struct InterpolatedMap{
         
         
         //MARK: Numeric methods
-        //Start********************************************************************************************
-//        let kernal_b_x_fftComplex = zip(kernal_b_x_fft.0, kernal_b_x_fft.1).map {
-//            Complex<Float>($0.0, $0.1)
-//        }
-//
-//        let kernal_b_y_fftComplex = zip(kernal_b_y_fft.0, kernal_b_y_fft.1).map {
-//            Complex<Float>($0.0, $0.1)
-//        }
-        //End*****************************************************************
         
         for ii in 0 ..< height{
   
             let row = gs[row: ii]
    
             var rowFft: ([Float], [Float]) = dft(row)!
+//            var rowFft: ([Float], [Float]) = fft(row)
             
             var cdft = ([Float](repeating: 0, count: gs.columns), [Float](repeating: 0, count:  gs.columns))
             //MARK: Accelerate methods
@@ -111,16 +101,8 @@ struct InterpolatedMap{
             //End***************************************************************************************************
             
             //MARK: Numeric methods
-            //Start********************************************************************************************
-//            let rowComplex = zip(rowFft.0, rowFft.1).map {Complex<Float>($0.0, $0.1)}
-//
-//            let cdftComplex = zip(rowComplex, kernal_b_x_fftComplex).map{$0.0 / $0.1}
-//
-//            cdft = (cdftComplex.map{$0.real}, cdftComplex.map{$0.imaginary})
-            //End********************************************************************************************
-            
-        
             coef[row: ii] = idft(cdft)!
+//
         }
 
        
@@ -130,6 +112,8 @@ struct InterpolatedMap{
             let column = coef[column: ii]
    
             var columnFft: ([Float], [Float]) = dft(column)!
+//            var columnFft: ([Float], [Float]) = fft(column)
+            
             
             var cdft = ([Float](repeating: 0, count: gs.rows), [Float](repeating: 0, count:  gs.rows))
             //MARK: Accelerate methods
@@ -157,16 +141,7 @@ struct InterpolatedMap{
             }
             
             //End***************************************************************************************************
-            
-            //MARK: Numeric methods
-            //Start********************************************************************************************
-//            let columnComplex = zip(columnFft.0, columnFft.1).map {Complex<Float>($0.0, $0.1)}
-//
-//            let cdftComplex = zip(columnComplex, kernal_b_y_fftComplex).map{$0.0 / $0.1}
-//
-//            cdft = (cdftComplex.map{$0.real}, cdftComplex.map{$0.imaginary})
-            //End********************************************************************************************
-            
+        
         
             coef[column: ii] = idft(cdft)!
         }

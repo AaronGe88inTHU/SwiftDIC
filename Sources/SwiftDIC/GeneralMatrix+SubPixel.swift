@@ -14,12 +14,12 @@ extension GeneralMatrix where Element == SubPixel{
         
     }
     
-    private var xs: Matrix<Float>{
+    var xs: Matrix<Float>{
         .init(rows: rows, columns: columns, grid: elements.map{$0.x})
     }
     
-    private var ys: Matrix<Float>{
-        .init(rows: rows, columns: columns, grid: elements.map{$0.x})
+    var ys: Matrix<Float>{
+        .init(rows: rows, columns: columns, grid: elements.map{$0.y})
     }
     
     var isIntSubset: Bool{

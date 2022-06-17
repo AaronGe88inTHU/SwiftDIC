@@ -6,18 +6,28 @@ import Algorithms
 @available(macOS 12.0, *)
 @available(iOS 15.0, *)
 final class SwiftDICTests: XCTestCase {
+    
+//    let reference = Matrix<Float>(rows: 1040, columns: 400, repeatedValue: 0)
+//    let currents = (0 ... 20).map {Matrix(rows: 1040, columns: 400, repeatedValue: Float($0))}
+    let project = DICProject(reference: Matrix<Float>.random(rows: 128, columns: 64, in: 0...1) ,
+                                 currents: (0 ... 20).map { _ in Matrix<Float>.random(rows: 128, columns: 64, in: 0...1)})
+
+    
     func test_fftable() throws{
+        
         let matrix1 = Matrix<Float>(rows: 8, columns: 8, repeatedValue: 0)
-        let matrix2 = Matrix<Float>(rows: 40, columns: 3*1024, repeatedValue: 0)
-        let matrix3 = Matrix<Float>(rows: 5*1024, columns: 5*8, repeatedValue: 0)
-        let matrix4 = Matrix<Float>(rows: 15*16, columns: 15*8, repeatedValue: 0)
+        let matrix2 = Matrix<Float>(rows: 1024, columns: 1024, repeatedValue: 0)
+        let matrix3 = Matrix<Float>(rows: 512, columns: 1024, repeatedValue: 0)
+        let matrix4 = Matrix<Float>(rows: 16, columns: 8, repeatedValue: 0)
+        
+        
+        
         XCTAssertTrue(matrix1.isFftable())
         XCTAssertTrue(matrix2.isFftable())
         XCTAssertTrue(matrix3.isFftable())
         XCTAssertTrue(matrix4.isFftable())
         
       
-        //        let matrix =
     }
     
     func test_interpolate() throws {
@@ -45,7 +55,7 @@ final class SwiftDICTests: XCTestCase {
                              0.5555,    1.4899,    0.1035 ,   2.8358  ,  0.3457,    2.6469  ,  0.4168  ,  1.6953,
                              1.1740,    0.8451,   1.2515,    0.4647   , 0.2520,    0.3399 ,   1.2308 ,   0.6947]
         
-        var expectedMatrix = Matrix(rows: 8, columns: 8, grid: expected)
+        let expectedMatrix = Matrix(rows: 8, columns: 8, grid: expected)
 //        expected = Matrix.qk * expectedMatrix * transpose(Matrix.qk)
         
         var expectedQkcqkT = GeneralMatrix<Matrix<Float>>(rows: expectedMatrix.rows,
@@ -80,7 +90,8 @@ final class SwiftDICTests: XCTestCase {
             XCTAssertEqual2D(expectedQkcqkT[y, x], qkCqkt[y, x], accuracy: 1e-3)
             
         }
-
+        
+        
         XCTAssertEqual2D(matrix[(2 ... 4), (2...4)], subPixs, accuracy: 1e-5)
         XCTAssertEqual(subPix22.value, matrix[2,2], accuracy: 1e-3)
         XCTAssertEqual(subPix55.value, matrix[5,5], accuracy: 1e-3)
@@ -134,18 +145,20 @@ final class SwiftDICTests: XCTestCase {
         
         let paddedMatrix = matrix.paddingToFttable()
         XCTAssertTrue(paddedMatrix.isFftable())
-        XCTAssertEqual2D(matrix, paddedMatrix[(0 ... 719), (0 ... 1079)])
+        XCTAssertEqual2D(matrix, paddedMatrix[(0 ... 399), (0 ... 1039)])
     }
-    
+
 
     
     func test_configProject() throws{
-        let reference = Matrix<Float>(rows: 1040, columns: 400, repeatedValue: 0)
-        let currents = (0 ... 20).map {Matrix(rows: 1040, columns: 400, repeatedValue: Float($0))}
-        let project = DICProject(reference: reference, currents: currents)
         
+        XCTAssertNoThrow(try project.config(configure: .init(subSize: 7, step: 7)))
         
-        XCTAssertNoThrow(try project.config(configure: .init(subSize: 41, step: 7)))
+    }
+    
+    func test_projectPrecompute() throws{
+        try test_configProject()
+        XCTAssertNoThrow(try project.preComputerRef())
         
     }
     
