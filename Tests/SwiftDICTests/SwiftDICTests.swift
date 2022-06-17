@@ -9,8 +9,8 @@ final class SwiftDICTests: XCTestCase {
     
 //    let reference = Matrix<Float>(rows: 1040, columns: 400, repeatedValue: 0)
 //    let currents = (0 ... 20).map {Matrix(rows: 1040, columns: 400, repeatedValue: Float($0))}
-    let project = DICProject(reference: Matrix<Float>.random(rows: 128, columns: 64, in: 0...1) ,
-                                 currents: (0 ... 20).map { _ in Matrix<Float>.random(rows: 128, columns: 64, in: 0...1)})
+//    let project = DICProject(reference: Matrix<Float>.random(rows: 256, columns: 128, in: 0...1) ,
+//                                 currents: (0 ... 20).map { _ in Matrix<Float>.random(rows: 256, columns: 128, in: 0...1)})
 
     
     func test_fftable() throws{
@@ -151,15 +151,30 @@ final class SwiftDICTests: XCTestCase {
 
     
     func test_configProject() throws{
+        let project = DICProject(reference: Matrix<Float>.random(rows: 256, columns: 128, in: 0...1) ,
+                                     currents: (0 ... 20).map { _ in Matrix<Float>.random(rows: 256, columns: 128, in: 0...1)})
         
-        XCTAssertNoThrow(try project.config(configure: .init(subSize: 7, step: 7)))
+        XCTAssertNoThrow(try project.config(configure: .init(subSize: 21, step: 3)))
         
     }
     
     func test_projectPrecompute() throws{
-        try test_configProject()
+        let project = DICProject(reference: Matrix<Float>.random(rows: 256, columns: 128, in: 0...1) ,
+                                     currents: (0 ... 20).map { _ in Matrix<Float>.random(rows: 256, columns: 128, in: 0...1)})
+        try project.config(configure: .init(subSize: 21, step: 3))
         XCTAssertNoThrow(try project.preComputerRef())
         
+    }
+    
+    func test_iterativeCompute() throws{
+        
+        let reference = Matrix<Float>.random(rows: 256, columns: 128, in: 0...1)
+        let project = DICProject(reference: reference,
+                                     currents:[reference])
+        try project.config(configure: .init(subSize: 21, step: 3))
+        try project.preComputerRef()
+        try project.compute(index: 0)
+        XCTAssertNoThrow(try project.iterativeSearch(initialGuess: [1.0, 1.0, 0.2, 0.2, 0.03, 0.1]))
     }
     
 }
