@@ -6,6 +6,7 @@
 //
 
 import Surge
+@available(iOS 13.0, *)
 @available(macOS 10.15, *)
 extension Matrix where Scalar == Float{
     
@@ -21,6 +22,7 @@ extension Matrix where Scalar == Float{
     }
 }
 
+@available(iOS 13.0, *)
 @available(macOS 10.15, *)
 extension Matrix where Scalar == Double{
     

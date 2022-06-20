@@ -8,7 +8,7 @@
 import Surge
 import Algorithms
 
-extension Matrix: DefaultInitializable where Scalar == Float{
+extension Matrix : DefaultInitializable where Scalar == Double  {
     public init()
     {
         
@@ -16,8 +16,8 @@ extension Matrix: DefaultInitializable where Scalar == Float{
         
     }
 }
-
-//extension Matrix: DefaultInitializable where Scalar == Double{
+//
+//extension Matrix: DefaultInitializable{
 //    public init()
 //    {
 //

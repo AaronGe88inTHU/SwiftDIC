@@ -8,6 +8,7 @@
 import Surge
 import Foundation
 
+@available(iOS 13.0, *)
 @available(macOS 10.15, *)
 public func normalize(_ lhs: Matrix<Float>)  -> Matrix<Float>{
     let diff = lhs - mean(lhs)
@@ -15,6 +16,7 @@ public func normalize(_ lhs: Matrix<Float>)  -> Matrix<Float>{
     return diff / sqrtf(value)
 }
 
+@available(iOS 13.0, *)
 @available(macOS 10.15, *)
 public func normalize(_ lhs: Matrix<Double>) -> Matrix<Double>{
     let diff = lhs - mean(lhs)

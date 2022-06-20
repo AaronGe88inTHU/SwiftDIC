@@ -18,12 +18,6 @@ struct GeneralMatrix<Element> where Element: DefaultInitializable{
     public let columns: Int
     var elements: [Element]
     
-//    init(rows: Int, columns: Int){
-//        self.rows = rows
-//        self.columns = columns
-//        self.subPixs = .init(repeating: SubPixel(), count: rows*columns)
-//    }
-    
     init(rows: Int, columns: Int, elements: [Element]){
         precondition(elements.count == rows*columns)
         self.rows = rows

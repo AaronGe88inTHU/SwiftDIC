@@ -9,16 +9,16 @@ import Surge
 
 extension GeneralMatrix where Element == SubPixel{
     
-    func values() -> Matrix<Float>{
+    func values() -> Matrix<Double>{
         .init(rows: rows, columns: columns, grid: elements.map{$0.value})
         
     }
     
-    var xs: Matrix<Float>{
+    var xs: Matrix<Double>{
         .init(rows: rows, columns: columns, grid: elements.map{$0.x})
     }
     
-    var ys: Matrix<Float>{
+    var ys: Matrix<Double>{
         .init(rows: rows, columns: columns, grid: elements.map{$0.y})
     }
     
@@ -28,7 +28,7 @@ extension GeneralMatrix where Element == SubPixel{
         
     }
     
-    var dvdx: Matrix<Float>?{
+    var dvdx: Matrix<Double>?{
         guard isIntSubset else{
             return nil
         }
@@ -36,7 +36,7 @@ extension GeneralMatrix where Element == SubPixel{
         
     }
     
-    var dvdy: Matrix<Float>?{
+    var dvdy: Matrix<Double>?{
         guard isIntSubset else{
             return nil
         }

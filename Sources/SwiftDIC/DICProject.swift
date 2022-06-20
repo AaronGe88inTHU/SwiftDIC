@@ -11,6 +11,8 @@ import Foundation
 import Accelerate
 
 
+
+@available(iOS 15.0, *)
 @available(macOS 12.0, *)
 class DICProject{
     
@@ -21,31 +23,28 @@ class DICProject{
     var centerAvailableColumns: ClosedRange<Int>? = nil
     
     
-    var reference: Matrix<Float>? = nil
-    var currents: [Matrix<Float>]? = nil
+    var reference: Matrix<Double>? = nil
+    var currents: [Matrix<Double>]? = nil
     
-    var referenceMap: GeneralMatrix<Matrix<Float>>? = nil
-    var currentMap : GeneralMatrix<Matrix<Float>>? = nil
+    var referenceMap: GeneralMatrix<Matrix<Double>>? = nil
+    var currentMap : GeneralMatrix<Matrix<Double>>? = nil
     
     var referenceInSubPixels: GeneralMatrix<SubPixel>? = nil
     var currentInSubPixels: GeneralMatrix<SubPixel>? = nil
     
-    var dfdxRef: Matrix<Float>? = nil
-    var dfdyRef: Matrix<Float>? = nil
-    
-  
-    
-  
-    
+    var dfdxRef: Matrix<Double>? = nil
+    var dfdyRef: Matrix<Double>? = nil
     
     var roiPoints: [(y:Int, x:Int)]?=nil
     var roiSubsets: [GeneralMatrix<SubPixel>]?=nil
-    var hessanRoi: [Matrix<Float>]?=nil
-    var dfdpRoi: [Matrix<Float>]?=nil
+    var hessanRoi: [Matrix<Double>]?=nil
+    var dfdpRoi: [GeneralMatrix<Matrix<Double>>]?=nil
+    
+    var deformVectorRoi :[[[Double]]]?=nil
     
     
-    public init(reference: Matrix<Float>?=nil,
-                currents: [Matrix<Float>]? = nil,
+    public init(reference: Matrix<Double>?=nil,
+                currents: [Matrix<Double>]? = nil,
                 configure: DICConfigure = DICConfigure(subSize: 41, step: 7)) {
         self.reference = reference
         self.currents = currents
@@ -99,7 +98,7 @@ class DICProject{
     }
     
     
-    private func subset_generate(top: Int=2, left: Int=2, bottom: Int, right: Int) throws{
+    private func subset_generate(top: Int=20, left: Int=20, bottom: Int, right: Int) throws{
         precondition(bottom < reference!.rows && right < reference!.columns)
         let height = bottom - top
         let width = right - left
@@ -107,7 +106,7 @@ class DICProject{
         var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1) / (4*halfSize * halfSize))
         guard seeds.count > 0
         else{
-            throw fatalError("Roi is too small")
+            throw fatalError("Roi is too large")
         }
         
         let ys =  (0 ... height / configure.subSize).map {
@@ -135,7 +134,7 @@ class DICProject{
             for ((iy, y), (ix, x)) in product(($0.0-halfSize...$0.0+halfSize).map{v in v}.indexed(),
                                               ($0.1-halfSize...$0.1+halfSize).map{v in v}.indexed()){
                 
-                subPixels[iy*configure.subSize+ix] = SubPixel(Float(y), Float(x), qkCqktMap: referenceMap!)
+                subPixels[iy*configure.subSize+ix] = SubPixel(Double(y), Double(x), qkCqktMap: referenceMap!)
             }
             return GeneralMatrix<SubPixel>(rows: configure.subSize, columns: configure.subSize, elements:subPixels)
         }
@@ -146,11 +145,11 @@ class DICProject{
         let rows = reference!.rows
         let columns = reference!.columns
         
-        dfdxRef = Matrix<Float>(rows: rows, columns: columns, repeatedValue: 0)
-        dfdyRef = Matrix<Float>(rows: rows, columns: columns, repeatedValue: 0)
+        dfdxRef = Matrix<Double>(rows: rows, columns: columns, repeatedValue: 0)
+        dfdyRef = Matrix<Double>(rows: rows, columns: columns, repeatedValue: 0)
     
-        let nd = Matrix<Float>(row: [1, 0, 0 ,0 ,0 ,0])
-        let dd = Matrix<Float>(column: [0, 1, 0, 0 ,0 ,0])
+        let nd = Matrix<Double>(row: [1, 0, 0 ,0 ,0 ,0])
+        let dd = Matrix<Double>(column: [0, 1, 0, 0 ,0 ,0])
         
         //TODO: structure concurrency
         for (row, column) in product( 2 ..< rows-3, 2 ..< columns-3){
@@ -162,16 +161,16 @@ class DICProject{
         
         ///parameters [u, v, du/dx, du/dy, dv/dx, dv/dy]
         ///
-        var refRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdyRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdxRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdudxRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdudyRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdvdxRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdvdyRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        hessanRoi = [Matrix<Float>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var refRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdyRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdxRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdudxRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdudyRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdvdxRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdvdyRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        hessanRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
         
-        dfdpRoi = [Matrix<Float>](repeating: .init(rows: 1, columns: 6, repeatedValue: 0.0), count: roiPoints!.count)
+        dfdpRoi = [GeneralMatrix<Matrix<Double>>] (repeating: GeneralMatrix<Matrix<Double>>(rows: configure.subSize, columns: configure.subSize, elements: [Matrix<Double>](repeating: Matrix<Double>(arrayLiteral: [0, 0, 0, 0, 0, 0]), count: configure.subSize*configure.subSize)), count: roiPoints!.count)
         
         
         for ii in 0 ..< roiPoints!.count{
@@ -186,16 +185,16 @@ class DICProject{
             
             let ys = subset.ys
             let xs = subset.xs
-            let dy = ys - Float(center.y)
-            let dx = xs - Float(center.x)
+            let dy = ys - Double(center.y)
+            let dx = xs - Double(center.x)
             
             
             let dfdyArray = subset.elements.map {dfdyRef![Int($0.y), Int($0.x)]}
-            let dfdy =  Matrix<Float>(rows: configure.subSize, columns: configure.subSize, grid: dfdyArray )
+            let dfdy =  Matrix<Double>(rows: configure.subSize, columns: configure.subSize, grid: dfdyArray )
             dfdyRoi[ii] = dfdy
             
             let dfdxArray = subset.elements.map {dfdxRef![Int($0.y), Int($0.x)]}
-            let dfdx = Matrix<Float>(rows: configure.subSize, columns: configure.subSize, grid: dfdxArray )
+            let dfdx = Matrix<Double>(rows: configure.subSize, columns: configure.subSize, grid: dfdxArray )
             dfdxRoi[ii] = dfdx
       
             dfdudyRoi[ii] = dfdx * dy
@@ -210,15 +209,15 @@ class DICProject{
         
         for ii in 0 ..< hessanRoi!.count{
             
-            var hessianValue : Matrix<Float> = .init(rows: 6, columns: 6, repeatedValue: 0.0)
+            var hessianValue : Matrix<Double> = .init(rows: 6, columns: 6, repeatedValue: 0.0)
             for (row, column) in product(0..<configure.subSize, 0..<configure.subSize){
-                let p  =  Matrix<Float>(row: [dfdxRoi[ii][row, column],
+                let p  =  Matrix<Double>(row: [dfdxRoi[ii][row, column],
                                               dfdyRoi[ii][row, column],
                                               dfdudxRoi[ii][row, column],
                                               dfdudyRoi[ii][row, column],
                                               dfdvdxRoi[ii][row, column],
                                               dfdvdyRoi[ii][row, column]])
-                dfdpRoi![ii] = p
+                dfdpRoi![ii][row, column] = p
                 
                 hessianValue += transpose(p) * p
             }
@@ -243,10 +242,15 @@ class DICProject{
     
     
     
-    public func iterativeSearch(initialGuess:[Float]) throws{
+    public func iterativeSearch(initialGuess:[Double]) throws{
         //MARK: intialGuess = [u, v, du/dx, du/dy, dv/dx, dv/dy]
         precondition(initialGuess.count == 6)
+        if deformVectorRoi == nil{
+            deformVectorRoi = [[[Double]]]()
+        }
         
+        var guess = initialGuess
+        var deformVector = [[Double]](repeating:[Double](repeating: 0.0, count: 6), count: roiPoints!.count)
         for ii in 0 ..< roiPoints!.count{
             let center = roiPoints![ii]
             let subset = roiSubsets![ii]
@@ -254,26 +258,22 @@ class DICProject{
             else{
                 throw fatalError("reference is not a Int subset")
             }
-//            let halfSize = configure.subSize / 2
-            
-            
-            
+
             let ys = subset.ys
             let xs = subset.xs
-            let dy = ys - Float(center.y)
-            let dx = xs - Float(center.x)
+            let dy = ys - Double(center.y)
+            let dx = xs - Double(center.x)
             
-            var normal:Float = 1.0
-            var loop = 0
-            
-            
-            var guess = initialGuess
-            while normal > 1e-5 && loop < 500 {
+            var normal:Double = 1.0
+            var coef:Double = 1000.0
+        
+           
+            while normal > 1e-5 && coef > 1e-5 {
                 let newXs = (xs + guess[0] + guess[2] * dx + guess[3] * dy).reduce([]) { partialResult, row in
                     partialResult + row.map{$0}
                 }
    
-                let newYs = (ys + guess[1] + guess[4] * dy + guess[5] * dy).reduce([]) { partialResult, row in
+                let newYs = (ys + guess[1] + guess[4] * dx + guess[5] * dy).reduce([]) { partialResult, row in
                     partialResult + row.map{ $0}
                 }
                 
@@ -282,29 +282,39 @@ class DICProject{
                 let deformSubset = GeneralMatrix<SubPixel>(rows: configure.subSize, columns: configure.subSize, elements: deformList)
                 
                 let normalizedDiff = normalize(roiSubsets![ii].values()) - normalize(deformSubset.values())
-
                 
-                let gradientList = normalizedDiff.reduce([]) { partialResult, row in
-                    partialResult + row.map{$0 * dfdpRoi![ii]}
+                coef = sum(pow(normalizedDiff, 2))
+                
+                var gradient = Matrix<Double>(arrayLiteral: [0,0,0,0,0,0])
+                for (row, column) in product(0..<gradient.rows, 0..<gradient.columns){
+                    gradient +=  normalizedDiff[row, column] * dfdpRoi![ii][row, column]
                 }
                 
 
-                let zero6x1 = Matrix<Float>(row:[0,0,0,0,0,0])
+                let diff = roiSubsets![ii].values() - mean(roiSubsets![ii].values())
+                let value: Double = sum(pow(diff, 2))
+                gradient = gradient * (-2) / sqrt(value)
                 
-                var gradientMatrix = gradientList.reduce(zero6x1) { partialResult, buffer in
-                   partialResult + buffer
-                }
+                let detlaP = solveAxb(hessanRoi![ii], gradient[row: 0])
                 
-                gradientMatrix = gradientMatrix * (-2) / sqrtf( roiSubsets![ii].values().variant())
-                let detlaP = solveAxb(hessanRoi![ii], gradientMatrix[row: 0])
+                let wOld = Matrix<Double>(rows: 3, columns: 3, grid: [1 + guess[2], guess[3], guess[0],
+                                                        guess[4], 1+guess[5], guess[1],
+                                                        0,0,1])
                 
-                guess = zip(guess, detlaP).map{$0.0 + $0.1}
+                let w = Matrix<Double>(rows: 3, columns: 3, grid: [1 + detlaP[2], detlaP[3], detlaP[0],
+                                                     detlaP[4], 1+detlaP[5], detlaP[1],
+                                                     0,0,1])
+                let wNew = wOld * inv(w)
                 
-                normal = sqrtf(detlaP.reduce(0.0, {$0 + powf($1, 2)}))
-                loop += 1
+                guess = [wNew[0,2], wNew[1,2], wNew[0,0]-1, wNew[0,1], wNew[1,0], wNew[1,1]-1]
+                normal = sqrt(detlaP.reduce(0.0, {$0 + pow($1, 2)}))
             }
-            
+            deformVector[ii] = guess
         }
+        deformVectorRoi!.append(deformVector)
+        
+        print(deformVectorRoi!)
+      
     }
     
 }

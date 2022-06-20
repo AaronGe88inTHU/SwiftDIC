@@ -9,11 +9,11 @@ import Foundation
 import Surge
 
 struct SubPixel : DefaultInitializable{
-    public let x: Float
-    public let y: Float
-    private(set) var value: Float
-    private(set) var dvdx: Float? = nil
-    private(set) var dvdy: Float? = nil
+    public let x: Double
+    public let y: Double
+    private(set) var value: Double
+    private(set) var dvdx: Double? = nil
+    private(set) var dvdy: Double? = nil
     
     init()
     {
@@ -22,7 +22,7 @@ struct SubPixel : DefaultInitializable{
         self.value = 0
     }
     
-    init(_ row: Float, _ column: Float, qkCqktMap: GeneralMatrix<Matrix<Float>>)
+    init(_ row: Double, _ column: Double, qkCqktMap: GeneralMatrix<Matrix<Double>>)
     {
         // y, x represents row, column
         if !(row >= 2 && (Int(floor(row))+3) <= qkCqktMap.rows){
@@ -47,9 +47,9 @@ struct SubPixel : DefaultInitializable{
         //
         let dx = x - floor(x)
         let dy = y - floor(y)
-        let yy = Matrix<Float>(rows: 1, columns: 6, grid: (0 ... 5).map{powf(dy, Float($0))})
-        let xx = Matrix<Float>(rows: 6, columns: 1, grid:  (0 ... 5).map{powf(dx, Float($0))})
-//        let qk = Matrix<Float>.qk
+        let yy = Matrix<Double>(rows: 1, columns: 6, grid: (0 ... 5).map{pow(dy, Double($0))})
+        let xx = Matrix<Double>(rows: 6, columns: 1, grid:  (0 ... 5).map{pow(dx, Double($0))})
+//        let qk = Matrix<Double>.qk
 //        let qkt = transpose(qk)
         var result = yy * localCoef * xx
         assert(result.columns == 1, "Value should be a scalar")
@@ -59,8 +59,8 @@ struct SubPixel : DefaultInitializable{
         
         
         if(x.isInt && y.isInt)  {
-            let nd = Matrix<Float>(row: [1, 0, 0 ,0 ,0 ,0])
-            let dd = Matrix<Float>(column: [0, 1, 0, 0 ,0 ,0])
+            let nd = Matrix<Double>(row: [1, 0, 0 ,0 ,0 ,0])
+            let dd = Matrix<Double>(column: [0, 1, 0, 0 ,0 ,0])
             result = nd *  localCoef * dd
             assert(result.columns == 1, "Value should be a scalar")
             assert(result.rows == 1, "Value should be a scalar")
