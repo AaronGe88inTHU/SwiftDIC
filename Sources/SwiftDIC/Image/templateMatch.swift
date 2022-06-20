@@ -58,11 +58,13 @@ public func templateMatch(templ: Matrix<Double>, image: Matrix<Double>) -> (row:
     
     var padded = Matrix<Double>(rows: image.rows+2*halfRow, columns: image.columns+2*halfColumn, repeatedValue: 0.0)
     //
+   
+    
     padded[halfRow...halfRow+image.rows-1, halfColumn...halfColumn+image.columns-1] = image
     //
     var resultPadded = Matrix<Double>(rows: padded.rows, columns: padded.columns, repeatedValue: 1000)
     let normalTempl = normalize(templ)
-    for (y, x) in product(halfRow...image.rows, halfColumn...image.columns)
+    for (y, x) in product(halfRow..<image.rows+halfRow, halfColumn..<image.columns+halfColumn)
     {
         let subImage = padded[y-halfRow...y+halfRow, x-halfColumn...x+halfColumn]
         
