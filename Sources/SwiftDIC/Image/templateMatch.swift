@@ -73,6 +73,5 @@ public func templateMatch(templ: Matrix<Double>, image: Matrix<Double>) -> (row:
     
     let result = resultPadded[halfRow...halfRow+image.rows-1, halfColumn...halfColumn+image.columns-1]
     
-    print(result.indexOfMinimum())
     return result.indexOfMinimum()
 }

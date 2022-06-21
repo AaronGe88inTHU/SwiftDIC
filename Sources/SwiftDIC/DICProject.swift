@@ -69,7 +69,9 @@ class DICProject{
         
         try paddingToFftable()
         
-        try subset_generate(bottom: reference!.rows-3, right: reference!.columns-3)
+        
+        
+        try subset_generate(bottom: reference!.rows-20, right: reference!.columns-20)
         
 //        try preComputerRef()
         
@@ -103,18 +105,24 @@ class DICProject{
         let height = bottom - top
         let width = right - left
         let halfSize: Int = configure.subSize/2
-        var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1) / (4*halfSize * halfSize))
+//        var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1) / (4*halfSize * halfSize))
+        var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1))
         guard seeds.count > 0
         else{
             throw fatalError("Roi is too large")
         }
         
-        let ys =  (0 ... height / configure.subSize).map {
-            top + halfSize + $0*(configure.subSize+configure.step)
+        let ys : [Int] =  (0 ... height).compactMap {
+//            top + halfSize + $0*(configure.subSize+configure.step)
+            let y = top + halfSize + $0 * configure.step
+            return y < bottom ? y : nil
         }
         
-        let xs = (0 ... width / configure.subSize).map {
-            left + halfSize + $0*(configure.subSize+configure.step)
+        let xs :[Int] = (0 ... width).compactMap {
+//            left + halfSize + $0*(configure.subSize+configure.step)
+            let x = left + halfSize + $0 * configure.step
+            return x < right ? x : nil
+            
         }
         
         var seedCount = 0
@@ -228,7 +236,7 @@ class DICProject{
     }
     
     
-    public func compute(index: Int) throws{
+    public func preComputeCur(index: Int) throws{
         precondition(hessanRoi != nil)
         if reference!.isFftable(){
             currentMap = InterpolatedMap(gs: currents![index]).qkCqkt()
@@ -251,9 +259,21 @@ class DICProject{
         
         var guess = initialGuess
         var deformVector = [[Double]](repeating:[Double](repeating: 0.0, count: 6), count: roiPoints!.count)
+        
+        let halfsize = configure.subSize/2
+        let y0 = roiPoints![0].y
+        let x0 = roiPoints![0].x
+        
+        let templ = reference![y0-halfsize...y0+halfsize, x0-halfsize...x0+halfsize]
+        let (initial_y, initial_x) = templateMatch(templ: templ, image: currents![0])
+        guess[0] = Double(initial_x-x0)
+        guess[1] = Double(initial_y-y0)
+        
         for ii in 0 ..< roiPoints!.count{
             let center = roiPoints![ii]
             let subset = roiSubsets![ii]
+            
+            
             guard subset.isIntSubset
             else{
                 throw fatalError("reference is not a Int subset")
@@ -267,8 +287,8 @@ class DICProject{
             var normal:Double = 1.0
             var coef:Double = 1000.0
         
-           
-            while normal > 1e-5 && coef > 1e-5 {
+            var loops = 0
+            while normal > 3e-4 && coef > 1e-2 && loops <= 500{
                 let newXs = (xs + guess[0] + guess[2] * dx + guess[3] * dy).reduce([]) { partialResult, row in
                     partialResult + row.map{$0}
                 }
@@ -308,8 +328,16 @@ class DICProject{
                 
                 guess = [wNew[0,2], wNew[1,2], wNew[0,0]-1, wNew[0,1], wNew[1,0], wNew[1,1]-1]
                 normal = sqrt(detlaP.reduce(0.0, {$0 + pow($1, 2)}))
+                loops += 1
+//                print(coef)
+                
             }
-            deformVector[ii] = guess
+            if loops >= 500{
+                deformVector[ii] = [0, 0 ,0, 0 ,0, 0]
+            }
+            else{
+                deformVector[ii] = guess
+            }
         }
         deformVectorRoi!.append(deformVector)
         

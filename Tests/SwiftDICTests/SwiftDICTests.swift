@@ -201,38 +201,41 @@ final class SwiftDICTests: XCTestCase {
 
 
         let (row, column) = templateMatch(templ: refGs[200-20...200+20, 60-20...60+20], image: curGs)
+        
+        XCTAssertEqual(row, 200)
+        XCTAssertEqual(column, 60)
        
     }
     
     func test_iterativeCompute() throws{
         
-//        guard let refImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_01.tif"),
-//              let curImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_02.tif"),
-//              let ref = refImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
-//              let cur = curImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
-//        else{
-//           throw fatalError("Bad file")
+        guard let refImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_01.tif"),
+              let curImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_02.tif"),
+              let ref = refImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let cur = curImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else{
+           throw fatalError("Bad file")
+        }
+
+        guard let reference = try? convertColorImage2GrayScaleMatrix(cgImage: ref),
+              let current = try? convertColorImage2GrayScaleMatrix(cgImage: cur)
+        else{
+            throw fatalError()
+        }
+        
+//        let reference = Matrix<Double>.random(rows: 128, columns: 128, in: 0...1)
+//        var current = Matrix<Double>(rows: 128, columns: 128,repeatedValue: 0.0)
+//
+//        for  ii in  0 ..< current.rows-5{
+//            current[row: ii+5] = reference[row: ii]
 //        }
 //
-//        guard let refGs = try? convertColorImage2GrayScaleMatrix(cgImage: ref),
-//              let curGs = try? convertColorImage2GrayScaleMatrix(cgImage: cur)
-//        else{
-//            throw fatalError()
-//        }
-        
-        let reference = Matrix<Double>.random(rows: 128, columns: 128, in: 0...1)
-        var current = Matrix<Double>(rows: 128, columns: 128,repeatedValue: 0.0)
-
-        for  ii in  0 ..< current.rows-5{
-            current[row: ii+5] = reference[row: ii]
-        }
-       
         let project = DICProject(reference: reference,
                                      currents:[current])
-        try project.config(configure: .init(subSize: 41, step: 3))
+        try project.config(configure: .init(subSize: 41, step: 7))
         try project.preComputerRef()
-        try project.compute(index: 0)
-        XCTAssertNoThrow(try project.iterativeSearch(initialGuess: [0.0, 5.4, 0.0, 0.0, 0.0, 0.0]))
+        try project.preComputeCur(index: 0)
+        XCTAssertNoThrow(try project.iterativeSearch(initialGuess: [0.0, 0, 0.0, 0.0, 0.0, 0.0]))
     }
     
 
