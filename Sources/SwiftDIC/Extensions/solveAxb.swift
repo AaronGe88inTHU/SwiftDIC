@@ -53,12 +53,6 @@ func solveAxb(_ lhs: Matrix<Float>, _ rhs: [Float]) -> [Float]{
                             
                             SparseSolve(llt, b, x)
                             
-//                            defer{
-//                     
-//                                SparseCleanup(a)
-//                                SparseCleanup(llt)
-//                              
-//                            }
                             
                         }
                         
@@ -118,21 +112,17 @@ func solveAxb(_ lhs: Matrix<Double>, _ rhs: [Double]) -> [Double]{
                             
                             SparseSolve(llt, b, x)
                             
-//                            defer{
-//
-//                                SparseCleanup(a)
-//                                SparseCleanup(llt)
-//
-//                            }
-                            
                         }
                         
                     }
                     
                 }
+                
+                
             }
         }
     }
+    
     
     return result
 }

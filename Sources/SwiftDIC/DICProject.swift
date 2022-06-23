@@ -265,7 +265,7 @@ class DICProject{
         let x0 = roiPoints![0].x
         
         let templ = reference![y0-halfsize...y0+halfsize, x0-halfsize...x0+halfsize]
-        let (initial_y, initial_x) = templateMatch(templ: templ, image: currents![0])
+        let (initial_y, initial_x) = normalizedCrossCorrelation(lhs: templ, rhs: currents![0])
         guess[0] = Double(initial_x-x0)
         guess[1] = Double(initial_y-y0)
         

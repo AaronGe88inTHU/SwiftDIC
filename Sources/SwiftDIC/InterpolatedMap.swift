@@ -37,8 +37,6 @@ struct InterpolatedMap{
         self.gs = gs
     }
     
-    
-    
     private func bSplineCoefMap() -> Matrix<Double> {
         let width = gs.columns
         let height = gs.rows
@@ -166,4 +164,6 @@ struct InterpolatedMap{
         
         return qkCqk
     }
+    
+   
 }

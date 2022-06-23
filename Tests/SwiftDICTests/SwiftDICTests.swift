@@ -199,8 +199,8 @@ final class SwiftDICTests: XCTestCase {
                    throw fatalError()
         }
 
-
-        let (row, column) = templateMatch(templ: refGs[200-20...200+20, 60-20...60+20], image: curGs)
+//        let (row, column) = templateMatch(templ: refGs[200-20...200+20, 60-20...60+20], image: curGs)
+        let (row, column) = normalizedCrossCorrelation(lhs: refGs[200-20...200+20, 60-20...60+20], rhs: curGs)
         
         XCTAssertEqual(row, 200)
         XCTAssertEqual(column, 60)
@@ -232,7 +232,7 @@ final class SwiftDICTests: XCTestCase {
 //
         let project = DICProject(reference: reference,
                                      currents:[current])
-        try project.config(configure: .init(subSize: 41, step: 7))
+        try project.config(configure: .init(subSize: 41, step: 41))
         try project.preComputerRef()
         try project.preComputeCur(index: 0)
         XCTAssertNoThrow(try project.iterativeSearch(initialGuess: [0.0, 0, 0.0, 0.0, 0.0, 0.0]))
