@@ -305,19 +305,19 @@ final class SwiftDICTests: XCTestCase {
         }
         
         var startTime = CFAbsoluteTimeGetCurrent()
-        let project = DICProject(reference: reference,
-                                 currents:[current])
-        try project.config(configure: .init(subSize: 41, step: 41))
-        try project.preComputerRef()
-        try project.preComputeCur(index: 0)
-        try project.iterativeSearch(initialGuess: [0.0, 0, 0.0, 0.0, 0.0, 0.0])
+//        let project = DICProject(reference: reference,
+//                                 currents:[current])
+//        try project.config(configure: .init(subSize: 41, step: 41))
+//        try project.preComputerRef()
+//        try project.preComputeCur(index: 0)
+//        try project.iterativeSearch(initialGuess: [0.0, 0, 0.0, 0.0, 0.0, 0.0])
         var timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
         print("Time elapsed for benckmark: \(timeElapsed) s.")
         
         startTime = CFAbsoluteTimeGetCurrent()
         let projectAsync = DICProject(reference: reference,
                                  currents:[current])
-        try await projectAsync.configAsync(configure: .init(subSize: 41, step: 41))
+        try await projectAsync.configAsync(configure: .init(subSize: 41, step: 2))
         try await projectAsync.preComputerRefAsync()
         try await projectAsync.preComputeCurAsync(index: 0)
         try await projectAsync.iterativeSearchAsync(initialGuess: [0.0, 0, 0.0, 0.0, 0.0, 0.0])

@@ -16,6 +16,7 @@ struct ROITaskGroup{
     let roiPoints: [(y:Int, x:Int)]
     let roiSubsets: [GeneralMatrix<SubPixel>]
     let reference : Matrix<Double>
+    let gridCount: Int
     let halfSize: Int
     var dfdxRef: Matrix<Double>
     var dfdyRef: Matrix<Double>
@@ -24,17 +25,19 @@ struct ROITaskGroup{
     init(roiPoints: [(y:Int, x:Int)],
          roiSubsets:  [GeneralMatrix<SubPixel>],
          reference : Matrix<Double>,
-         halfSize: Int,
+         gridCount: Int,
+         halfSize:Int,
          dfdxRef: Matrix<Double>,
          dfdyRef: Matrix<Double>)
     {
         self.roiPoints = roiPoints
         self.roiSubsets = roiSubsets
         self.reference = reference
+        self.gridCount = gridCount
         self.halfSize = halfSize
         self.dfdxRef = dfdxRef
         self.dfdyRef = dfdyRef
-        dfdpRoi = DfdpROI(halfSize: halfSize, count: roiPoints.count)
+        dfdpRoi = DfdpROI(gridCount: gridCount, count: roiPoints.count)
     }
     
     
@@ -44,16 +47,23 @@ struct ROITaskGroup{
         
         //        var results: [ROIDeformVector]
 
-        
+        let step = (2 * halfSize + 1) / gridCount
         let result = try await withThrowingTaskGroup(of: (Int, Matrix<Double>).self,
                                                      returning: [(Int, Matrix<Double>)].self) { group in
             for ii in 0 ..< roiPoints.count{
                 let x = roiPoints[ii].x
                 let y = roiPoints[ii].y
                 let subset = roiSubsets[ii]
-                let roi = reference[y-halfSize...y+halfSize, x-halfSize...x+halfSize]
+                let roiArray = [Double](repeating: 0, count: gridCount*gridCount)
+//                for (yy, xx) in product(0..<gridCount, 0..<gridCount){
+//                    roiArray[yy * gridCount + xx] =
+//                }
+                let roi = Matrix<Double>(rows: gridCount, columns: gridCount) { row, column in
+                    reference[y-halfSize+row*step, x-halfSize+column*step]
+                }
+                
                 group.addTask {
-                    let value = try await calculateDeformVectorAsync(y: y, x: x, halfSize: halfSize, subset: subset, dfdyRef: dfdyRef, dfdxRef: dfdxRef)
+                    let value = try await calculateDeformVectorAsync(y: y, x: x, gridCount: gridCount, subset: subset, dfdyRef: dfdyRef, dfdxRef: dfdxRef)
                     
                     
                     let hassien = try await calculateHassiensAsync(ii, defVec: value, refRoi: roi)
@@ -77,7 +87,7 @@ struct ROITaskGroup{
     
     
     private func calculateDeformVectorAsync(y:Int, x:Int,
-                                            halfSize: Int, subset: GeneralMatrix<SubPixel>,
+                                            gridCount: Int, subset: GeneralMatrix<SubPixel>,
                                             dfdyRef: Matrix<Double>, dfdxRef: Matrix<Double>) async throws -> ROIDeformVector
     {
         precondition(subset.isIntSubset)
@@ -88,9 +98,9 @@ struct ROITaskGroup{
         let dx = xs - Double(x)
         
         let dfdyArray = subset.elements.map {dfdyRef[Int($0.y), Int($0.x)]}
-        let dfdy =  Matrix<Double>(rows: halfSize*2+1, columns: halfSize*2+1, grid: dfdyArray )
+        let dfdy =  Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdyArray )
         let dfdxArray = subset.elements.map {dfdxRef[Int($0.y), Int($0.x)]}
-        let dfdx = Matrix<Double>(rows: halfSize*2+1, columns: halfSize*2+1, grid: dfdxArray )
+        let dfdx = Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdxArray )
         
         
         return  ROIDeformVector(dfdx: dfdx, dfdy: dfdy,
@@ -105,12 +115,12 @@ struct ROITaskGroup{
         //        var hessianValue : Matrix<Double> = .init(rows: 6, columns: 6, repeatedValue: 0.0)
 //        let  dfdpROI = DfdpROI(halfSize: halfSize)
         
-        return try await withThrowingTaskGroup(of: (Int, Matrix<Double>).self,
+        return try await withThrowingTaskGroup(of: Matrix<Double>.self,
                                                returning: Matrix<Double>.self) { group in
             
-            for (row, column) in product(0..<halfSize*2+1, 0..<halfSize*2+1){
+            for (row, column) in product(0..<gridCount, 0..<gridCount){
                 group.addTask {
-                    let rc = row * (halfSize*2+1) + column
+//                    let rc = row * (gridCount) + column
                     let p  =  Matrix<Double>(row: [defVec.dfdx[row, column],
                                                    defVec.dfdy[row, column],
                                                    defVec.dfdudx[row, column],
@@ -118,13 +128,13 @@ struct ROITaskGroup{
                                                    defVec.dfdvdx[row, column],
                                                    defVec.dfdvdy[row, column]])
                     await dfdpRoi.setIndividualValue(index, row, column, p)
-                    return (rc, transpose(p) * p)
+                    return transpose(p) * p
                 }
                 
             }
             
             let hassien = try await group.reduce(Matrix<Double>(rows: 6, columns: 6, repeatedValue: 0)) {
-                $0 + $1.1
+                $0 + $1
             }
             
             guard hassien.isPositiveDefined()
@@ -142,17 +152,17 @@ struct ROITaskGroup{
 
 fileprivate actor DfdpROI{
     private var dfdp : [GeneralMatrix<Matrix<Double>>]
-    init(halfSize: Int, count: Int)
+    init(gridCount: Int, count: Int)
     {
         
         let matrix = Matrix<Double>(rows: 6,
                                          columns: 6,
                                          repeatedValue: 0)
                         
-        let gMatrix = GeneralMatrix(rows: halfSize*2+1,
-                            columns: halfSize*2+1,
+        let gMatrix = GeneralMatrix(rows: gridCount,
+                            columns: gridCount,
                                     elements: .init(repeating: matrix,
-                                                    count: (halfSize*2+1)*(halfSize*2+1)))
+                                                    count: gridCount*gridCount))
                            
         self.dfdp = .init(repeating: gMatrix, count: count)
     }
@@ -169,3 +179,4 @@ fileprivate actor DfdpROI{
     
     
 }
+

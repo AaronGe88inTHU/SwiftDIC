@@ -15,7 +15,7 @@ func roiIterative(initialGuess:[Double],
                   dfdp: GeneralMatrix<Matrix<Double>>,
                   hassien:Matrix<Double>,
                   currentMap:GeneralMatrix<Matrix<Double>>,
-                  subsize: Int) async throws -> [Double]{
+                  gridCount: Int) async throws -> [Double]{
     
     guard subset.isIntSubset
     else{
@@ -30,6 +30,8 @@ func roiIterative(initialGuess:[Double],
     var guess = initialGuess
     var normal:Double = 1.0
     var coef:Double = 1000.0
+    
+    
     
     var loops = 0
     while normal > 3e-4 && coef > 1e-2 && loops <= 500{
@@ -56,7 +58,7 @@ func roiIterative(initialGuess:[Double],
         
         let deformList = zip(newYs, newXs).map {SubPixel($0.0, $0.1, qkCqktMap: currentMap)}
         
-        let deformSubset = GeneralMatrix<SubPixel>(rows: subsize, columns: subsize, elements: deformList)
+        let deformSubset = GeneralMatrix<SubPixel>(rows: gridCount , columns: gridCount, elements: deformList)
         
         let normalizedDiff = normalize(subset.values()) - normalize(deformSubset.values())
         
@@ -97,6 +99,26 @@ func roiIterative(initialGuess:[Double],
     }
 }
 
+actor DeformVectorsActor{
+    var deformatVectors: [[Double]]
+    init(count: Int){
+        deformatVectors = [[Double]](repeating: [0,0,0,0,0,0], count: count)
+    }
+    
+    init(deformatVectors: [[Double]])
+    {
+        self.deformatVectors = deformatVectors
+    }
+    
+    public func setValueByIndex(index: Int, value: [Double]){
+        deformatVectors[index] = value
+    }
+    
+    public func toArray()  -> [[Double]] {
+        deformatVectors
+    }
+    
+}
 
 
 
