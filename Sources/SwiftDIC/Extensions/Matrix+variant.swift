@@ -33,7 +33,6 @@ extension Matrix where Scalar == Double{
         let subedSqrt = pow(subed, 2)
 //
         let varience = sum(subedSqrt)
-        assert(varience > 1e-8)
         return varience
     }
 }

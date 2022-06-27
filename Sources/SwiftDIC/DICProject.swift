@@ -8,7 +8,7 @@
 import Surge
 import Algorithms
 import Foundation
-import Accelerate
+
 
 
 
@@ -71,14 +71,25 @@ class DICProject{
         
         
         
-        try subset_generate(bottom: reference!.rows-20, right: reference!.columns-20)
+        try subsetGenerator(bottom: reference!.rows-20, right: reference!.columns-20)
         
 //        try preComputerRef()
         
         
     }
     
-    private func paddingToFftable() throws
+    public func configAsync (configure: DICConfigure) async throws{
+        self.configure = configure
+        centerAvailableRows = (configure.subSize / 2+1 ... reference!.rows - configure.subSize/2-1)
+        centerAvailableColumns = (configure.subSize / 2+1 ... reference!.columns - configure.subSize/2-1)
+        
+        try await paddingToFftableAsync()
+        try await subsetGeneratorAsync(bottom: reference!.rows-20, right: reference!.columns-20)
+//
+        
+    }
+    
+    public func paddingToFftable() throws
     {
         guard reference != nil
         else {
@@ -99,8 +110,29 @@ class DICProject{
         
     }
     
+    public func paddingToFftableAsync() async throws
+    {
+        guard reference != nil
+        else {
+            throw fatalError("No reference founded")
+        }
+        guard currents != nil,
+              currents!.count > 0
+        else{
+            throw fatalError("No current images founded")
+        }
+        
+        if reference!.isFftable(){
+            referenceMap = try await InterpolatedMap(gs: reference!).qkCqktAsync()
+        }
+        else{
+            referenceMap = try await InterpolatedMap(gs: reference!.paddingToFttable()).qkCqktAsync()[0...reference!.rows-1, 0...reference!.columns-1]
+        }
+        
+    }
     
-    private func subset_generate(top: Int=20, left: Int=20, bottom: Int, right: Int) throws{
+    
+    private func subsetGenerator(top: Int=20, left: Int=20, bottom: Int, right: Int) throws{
         precondition(bottom < reference!.rows && right < reference!.columns)
         let height = bottom - top
         let width = right - left
@@ -147,6 +179,71 @@ class DICProject{
             return GeneralMatrix<SubPixel>(rows: configure.subSize, columns: configure.subSize, elements:subPixels)
         }
     }
+    
+    private func subsetGeneratorAsync(top: Int=20, left: Int=20, bottom: Int, right: Int) async throws{
+        precondition(bottom < reference!.rows && right < reference!.columns)
+        let height = bottom - top
+        let width = right - left
+        let halfSize: Int = configure.subSize/2
+//        var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1) / (4*halfSize * halfSize))
+        var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1))
+        guard seeds.count > 0
+        else{
+            throw fatalError("Roi is too large")
+        }
+        
+        let ys : [Int] =  (0 ... height).compactMap {
+//            top + halfSize + $0*(configure.subSize+configure.step)
+            let y = top + halfSize + $0 * configure.step
+            return y < bottom ? y : nil
+        }
+        
+        let xs :[Int] = (0 ... width).compactMap {
+//            left + halfSize + $0*(configure.subSize+configure.step)
+            let x = left + halfSize + $0 * configure.step
+            return x < right ? x : nil
+            
+        }
+        
+        var seedCount = 0
+        for (y, x) in product(ys, xs){
+            if y <= bottom-halfSize && x <= right-halfSize{
+                seeds[seedCount] = (y, x)
+                seedCount += 1
+            }
+        }
+        
+        seeds = seeds.dropLast(seeds.count - seedCount)
+        roiPoints = seeds
+        
+        //TODO: structure concurrency
+        
+        let qkMap = ReferenceMap(referenceMap: referenceMap!)
+//
+        let results = try await withThrowingTaskGroup(of: (Int, GeneralMatrix<SubPixel>).self, returning: [(Int, GeneralMatrix<SubPixel>)].self){ group in
+            for (index, roi) in roiPoints!.indexed(){
+                let row = roi.y
+                let column = roi.x
+                
+                group.addTask {
+                    var subPixels = [SubPixel](repeating: SubPixel(), count: self.configure.subSize*self.configure.subSize)
+                    for ((iy, y), (ix, x)) in product((row-halfSize...row+halfSize).map{v in v}.indexed(),
+                                                      (column-halfSize...column+halfSize).map{v in v}.indexed()){
+                        subPixels[iy*self.configure.subSize+ix] = SubPixel(Double(y), Double(x), qkCqktMap: qkMap.getMap())
+                    }
+                    return (index, GeneralMatrix<SubPixel>(rows: self.configure.subSize, columns: self.configure.subSize, elements:subPixels))
+                   
+                }
+            }
+            
+            return try await group.collect()
+        }
+        
+        roiSubsets = results.sorted(by: {$0.0 < $1.0}).map{$0.1}
+        
+    }
+    
+    
     
     func preComputerRef() throws{
         
@@ -211,8 +308,7 @@ class DICProject{
             dfdvdyRoi[ii] = dfdy * dy
             dfdvdxRoi[ii] = dfdy * dx
             
-            
-            
+
         }
         
         for ii in 0 ..< hessanRoi!.count{
@@ -235,6 +331,46 @@ class DICProject{
         }
     }
     
+    func preComputerRefAsync() async throws{
+        
+        let rows = reference!.rows
+        let columns = reference!.columns
+        
+        dfdxRef = Matrix<Double>(rows: rows, columns: columns, repeatedValue: 0)
+        dfdyRef = Matrix<Double>(rows: rows, columns: columns, repeatedValue: 0)
+    
+        let nd = Matrix<Double>(row: [1, 0, 0 ,0 ,0 ,0])
+        let dd = Matrix<Double>(column: [0, 1, 0, 0 ,0 ,0])
+        
+        //TODO: structure concurrency
+        for (row, column) in product( 2 ..< rows-3, 2 ..< columns-3){
+            let localCoef = referenceMap![row, column]
+            dfdyRef![row, column] = (transpose(dd) * localCoef * transpose(nd))[0,0]
+            dfdxRef![row, column] = (nd * localCoef * dd)[0,0]
+        }
+        
+
+        
+        dfdpRoi = [GeneralMatrix<Matrix<Double>>] (repeating: GeneralMatrix<Matrix<Double>>(rows: configure.subSize, columns: configure.subSize, elements: [Matrix<Double>](repeating: Matrix<Double>(arrayLiteral: [0, 0, 0, 0, 0, 0]), count: configure.subSize*configure.subSize)), count: roiPoints!.count)
+        
+        let roiTaskGroup = ROITaskGroup(roiPoints: roiPoints!, roiSubsets: roiSubsets!, reference: reference!, halfSize: configure.subSize/2, dfdxRef: dfdxRef!, dfdyRef: dfdyRef!)
+        
+       
+        guard let hessan = try? await roiTaskGroup.calculateHassien(),
+              let dfdp = try? await roiTaskGroup.dfdp
+                
+        else{
+            throw fatalError()
+        }
+        
+        hessanRoi = hessan
+        dfdpRoi = dfdp
+        
+        
+            
+        
+    }
+    
     
     public func preComputeCur(index: Int) throws{
         precondition(hessanRoi != nil)
@@ -244,6 +380,18 @@ class DICProject{
         }
         else{
             currentMap = InterpolatedMap(gs: currents![index].paddingToFttable()).qkCqkt()[0...reference!.rows-1, 0...reference!.columns-1]
+        }
+        
+    }
+    
+    public func preComputeCurAsync(index: Int) async throws{
+        precondition(hessanRoi != nil)
+        if reference!.isFftable(){
+            currentMap = try await InterpolatedMap(gs: currents![index]).qkCqktAsync()
+            //            currentMaps = currents!.map{InterpolatedMap(gs:$0).bSplineCoefMap}
+        }
+        else{
+            currentMap = try await InterpolatedMap(gs: currents![index].paddingToFttable()).qkCqktAsync()[0...reference!.rows-1, 0...reference!.columns-1]
         }
         
     }
@@ -288,7 +436,7 @@ class DICProject{
             var coef:Double = 1000.0
         
             var loops = 0
-            while normal > 3e-4 && coef > 1e-2 && loops <= 500{
+            while normal > 1e-4 && coef > 1e-2 && loops <= 500{
                 let newXs = (xs + guess[0] + guess[2] * dx + guess[3] * dy).reduce([]) { partialResult, row in
                     partialResult + row.map{$0}
                 }
@@ -297,11 +445,23 @@ class DICProject{
                     partialResult + row.map{ $0}
                 }
                 
+               
+                guard newXs.allSatisfy({ value in
+                    Int(value) >= 0 && Int(value) < currentMap!.columns
+                }),
+                      newYs.allSatisfy({ value in
+                          Int(value) >= 0 && Int(value) < currentMap!.rows
+                      })
+                else{
+                    loops = 501
+                    continue
+                }
+                
                 let deformList = zip(newYs, newXs).map {SubPixel($0.0, $0.1, qkCqktMap: currentMap!)}
                 
                 let deformSubset = GeneralMatrix<SubPixel>(rows: configure.subSize, columns: configure.subSize, elements: deformList)
                 
-                let normalizedDiff = normalize(roiSubsets![ii].values()) - normalize(deformSubset.values())
+                let normalizedDiff = normalize(subset.values()) - normalize(deformSubset.values())
                 
                 coef = sum(pow(normalizedDiff, 2))
                 
@@ -311,7 +471,7 @@ class DICProject{
                 }
                 
 
-                let diff = roiSubsets![ii].values() - mean(roiSubsets![ii].values())
+                let diff = subset.values() - mean(subset.values())
                 let value: Double = sum(pow(diff, 2))
                 gradient = gradient * (-2) / sqrt(value)
                 
@@ -341,15 +501,97 @@ class DICProject{
         }
         deformVectorRoi!.append(deformVector)
         
-        print(deformVectorRoi!)
+//        print(deformVector)
       
     }
     
-}
+    public func iterativeSearchAsync(initialGuess:[Double]) async throws{
+        //MARK: intialGuess = [u, v, du/dx, du/dy, dv/dx, dv/dy]
+        precondition(initialGuess.count == 6)
+        var guesses: [[Double]]
+        let halfsize = configure.subSize/2
+        
+        
+        
+        if deformVectorRoi == nil{
+            deformVectorRoi = [[[Double]]]()
+            
+            let y0 = roiPoints![0].y
+            let x0 = roiPoints![0].x
+            
+            let templ = reference![y0-halfsize...y0+halfsize, x0-halfsize...x0+halfsize]
+            let (initial_y, initial_x) = normalizedCrossCorrelation(lhs: templ, rhs: currents![0])
+        
+            guesses = [[Double]](repeating: [Double(initial_x-x0), Double(initial_y-y0), 0,0,0,0], count: roiSubsets!.count)
+        }
+        
+        else{
+            guesses = deformVectorRoi!.last!
+        }
+        
+        let deformVectorActor = DeformVectorsActor(deformatVectors: guesses)
+       
+        let currentM = currentMap!
+        await withThrowingTaskGroup(of: Void.self) { group in
+            for ii in 0 ..< roiPoints!.count{
+                let center = roiPoints![ii]
+                let subset = roiSubsets![ii]
+                let dfdp = dfdpRoi![ii]
+                let hessen = hessanRoi![ii]
+                let guess = guesses[ii]
+                
+                group.addTask {
+                    let value = try await roiIterative(initialGuess: guess, center: center, subset: subset, dfdp: dfdp, hassien: hessen, currentMap: currentM, subsize: halfsize*2+1)
+                    await deformVectorActor.setValueByIndex(index: ii, value: value)
+                }
+            }
 
+        }
+        
+        await deformVectorRoi!.append(deformVectorActor.toArray())
+        
+//        await print(deformVectorActor.toArray())
+    }
+}
+    
+    
 
 struct DICConfigure{
     let subSize: Int
     let step: Int
+    
+}
+
+actor ReferenceMap{
+    let referenceMap: GeneralMatrix<Matrix<Double>>
+    init(referenceMap: GeneralMatrix<Matrix<Double>>)
+    {
+        self.referenceMap = referenceMap
+    }
+    
+    nonisolated func getMap() -> GeneralMatrix<Matrix<Double>>
+    {
+         referenceMap
+    }
+}
+
+actor DeformVectorsActor{
+    var deformatVectors: [[Double]]
+    init(count: Int){
+        deformatVectors = [[Double]](repeating: [0,0,0,0,0,0], count: count)
+    }
+    
+    init(deformatVectors: [[Double]])
+    {
+        self.deformatVectors = deformatVectors
+    }
+    
+    public func setValueByIndex(index: Int, value: [Double]){
+        deformatVectors[index] = value
+    }
+    
+    public func toArray()  -> [[Double]] {
+        deformatVectors
+    }
     
 }

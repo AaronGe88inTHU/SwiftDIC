@@ -37,7 +37,7 @@ struct InterpolatedMap{
         self.gs = gs
     }
     
-    private func bSplineCoefMap() -> Matrix<Double> {
+    func bSplineCoefMap() -> Matrix<Double> {
         let width = gs.columns
         let height = gs.rows
 
@@ -97,8 +97,6 @@ struct InterpolatedMap{
                 }
             }
             
-            //End***************************************************************************************************
-            
             //MARK: Numeric methods
             coef[row: ii] = idft(cdft)!
 //
@@ -138,13 +136,73 @@ struct InterpolatedMap{
                     }
                 }
             }
-            
-            //End***************************************************************************************************
-        
-        
             coef[column: ii] = idft(cdft)!
         }
     
+        return coef
+
+    }
+    
+    func bSplineCoefMapAsync() async throws -> Matrix<Double> {
+        let width = gs.columns
+        let height = gs.rows
+
+        let kernal_b: [Double] = [1.0/120, 13/60, 11/20, 13/60, 1.0/120]
+        var kernal_b_x: [Double] = .init(repeating: 0, count: width)
+        var kernal_b_y: [Double] = .init(repeating: 0, count: height)
+
+        for ii in 0 ... 2{
+            kernal_b_x[ii] = kernal_b[2+ii]
+            kernal_b_y[ii] = kernal_b[2+ii]
+        }
+        
+        kernal_b_x[width-2] = kernal_b[0]
+        kernal_b_x[width-1] = kernal_b[1]
+        
+        kernal_b_y[height-2] = kernal_b[0]
+        kernal_b_y[height-1] = kernal_b[1]
+        
+    
+        var coef = Matrix<Double>(rows: gs.rows, columns: gs.columns, repeatedValue: 0)
+
+        let kernal_b_x_fft:([Double], [Double]) = dft(kernal_b_x)!
+        let kernal_b_y_fft:([Double], [Double]) = dft(kernal_b_y)!
+        
+        
+        let rowResults =  try await withThrowingTaskGroup(of: (Int, [Double]).self, returning: [(Int, [Double])].self) { group  in
+            for ii in 0 ..< height{
+                let row = gs[row: ii]
+                group.addTask {
+                    Interpolate1D(index: ii, vector: row, length: gs.columns, kernal: kernal_b_x_fft)
+                }
+            }
+            
+            return try await group.collect()
+        }
+        
+        let rows = rowResults.sorted(by: {$0.0 < $1.0}).map{$0.1}
+        
+        for ii in 0 ..< gs.rows{
+            coef[row: ii] = rows[ii]
+        }
+        
+        let columnResults = try await withThrowingTaskGroup(of: (Int, [Double]).self, returning: [(Int, [Double])].self){ group in
+            for ii in 0 ..< width{
+                let column = coef[column: ii]
+                group.addTask {
+                    Interpolate1D(index: ii, vector: column, length: gs.rows, kernal: kernal_b_y_fft)
+                }
+            }
+            
+            return try await group.collect()
+        }
+        
+        let columns = columnResults.sorted(by: {$0.0 < $1.0}).map{$0.1}
+        
+        for ii in 0 ..< gs.columns{
+            coef[column: ii] = columns[ii]
+        }
+        
         return coef
 
     }
@@ -165,5 +223,75 @@ struct InterpolatedMap{
         return qkCqk
     }
     
+    
+    public func qkCqktAsync () async throws -> GeneralMatrix<Matrix<Double>>{
+        var qkCqk = GeneralMatrix<Matrix<Double>>(rows: gs.rows,
+                                                 columns: gs.columns,
+                                                  elements: .init(repeating: .init(rows: 6, columns: 6, repeatedValue: 0.0),
+                                                                  count: gs.rows*gs.columns))
+        let rows = (2 ..< qkCqk.rows-3).map {$0}
+        let columns = (2 ..< qkCqk.columns-3).map{$0}
+        let qk = Matrix<Double>.qk
+        let qkt = transpose(qk)
+        let bmap = try await bSplineCoefMapAsync()
+        
+        let indexedResults = try await withThrowingTaskGroup(of: (Int, Matrix<Double>).self, returning:  [(Int, Matrix<Double>)].self) { group in
+            
+            for (y, x) in product(rows, columns){
+                let bm6 = bmap[(y-2 ... y+3), (x-2 ... x+3)]
+                let index = (y-2) * (qkCqk.columns-5) + (x-2)
+                group.addTask {
+                    (index, qk * bm6 * qkt)
+                }
+            }
+            
+            return try await group.collect()
+        }
+        
+        let results = indexedResults.sorted {$0.0 < $1.0}.map {
+            $0.1
+        }
+  
+        
+        qkCqk[2...qkCqk.rows-4, 2...qkCqk.columns-4] = GeneralMatrix<Matrix<Double>>(rows: qkCqk.rows-5,
+                                                                                     columns: qkCqk.columns-5,
+                                                                                     elements: results)
+
+        return qkCqk
+       
+    }
+    
    
+    
+    private func Interpolate1D (index: Int, vector: [Double], length: Int, kernal: ([Double], [Double])) -> (Int, [Double]){
+        var rowFft: ([Double], [Double]) = dft(vector)!
+
+        var cdft = ([Double](repeating: 0, count: length), [Double](repeating: 0, count: length))
+        var kernal_fft = kernal
+       
+        //MARK: Accelerate methods
+        //Start********************************************************************************************
+        
+        rowFft.0.withUnsafeMutableBufferPointer { arealPtr in
+            rowFft.1.withUnsafeMutableBufferPointer { aimagPtr in
+                kernal_fft.0.withUnsafeMutableBufferPointer { brealPtr in
+                    kernal_fft.1.withUnsafeMutableBufferPointer { bimagPtr in
+                        cdft.0.withUnsafeMutableBufferPointer { crealPtr in
+                            cdft.1.withUnsafeMutableBufferPointer { cimagPtr in
+                                let aSplitComplex = DSPDoubleSplitComplex(realp: arealPtr.baseAddress!,
+                                                                    imagp: aimagPtr.baseAddress!)
+                                let bSplitComplex = DSPDoubleSplitComplex(realp: brealPtr.baseAddress!,
+                                                                    imagp: bimagPtr.baseAddress!)
+                                var cSplitComplex = DSPDoubleSplitComplex(realp: crealPtr.baseAddress!,
+                                                                    imagp: cimagPtr.baseAddress!)
+
+                                vDSP.divide(aSplitComplex, by: bSplitComplex, count: gs.columns, result: &cSplitComplex)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return (index, idft(cdft)!)
+    }
 }

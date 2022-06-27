@@ -12,7 +12,7 @@ public protocol DefaultInitializable {
     init()
 }
 
-struct GeneralMatrix<Element> where Element: DefaultInitializable{
+public struct GeneralMatrix<Element> where Element: DefaultInitializable{
  
     public let rows: Int
     public let columns: Int
