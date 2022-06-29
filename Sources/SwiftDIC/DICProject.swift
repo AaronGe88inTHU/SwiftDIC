@@ -79,8 +79,8 @@ class DICProject{
     
     public func configAsync (configure: DICConfigure) async throws{
         self.configure = configure
-        centerAvailableRows = (configure.subSize / 2+1 ... reference!.rows - configure.subSize/2-1)
-        centerAvailableColumns = (configure.subSize / 2+1 ... reference!.columns - configure.subSize/2-1)
+        centerAvailableRows = (configure.subSize/2+1 ... reference!.rows - configure.subSize/2-1)
+        centerAvailableColumns = (configure.subSize/2+1 ... reference!.columns - configure.subSize/2-1)
         
         try await paddingToFftableAsync()
         try await subsetGeneratorAsync(bottom: reference!.rows-20, right: reference!.columns-20)
@@ -136,22 +136,24 @@ class DICProject{
         let height = bottom - top
         let width = right - left
         let halfSize: Int = configure.subSize/2
-//        var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1) / (4*halfSize * halfSize))
+        let gridCount = configure.subSize
+//
         var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1))
         guard seeds.count > 0
         else{
             throw fatalError("Roi is too large")
         }
         
+        
         let ys : [Int] =  (0 ... height).compactMap {
 //            top + halfSize + $0*(configure.subSize+configure.step)
-            let y = top + halfSize + $0 * configure.step
+            let y = top + halfSize + $0 * (configure.step)
             return y < bottom ? y : nil
         }
         
         let xs :[Int] = (0 ... width).compactMap {
 //            left + halfSize + $0*(configure.subSize+configure.step)
-            let x = left + halfSize + $0 * configure.step
+            let x = left + halfSize + $0 * (configure.step)
             return x < right ? x : nil
             
         }
@@ -166,16 +168,20 @@ class DICProject{
         
         seeds = seeds.dropLast(seeds.count - seedCount)
         roiPoints = seeds
-        
+    
         //TODO: structure concurrency
         roiSubsets = roiPoints!.map{
-            var subPixels = [SubPixel](repeating: SubPixel(), count: configure.subSize*configure.subSize)
-            for ((iy, y), (ix, x)) in product(($0.0-halfSize...$0.0+halfSize).map{v in v}.indexed(),
-                                              ($0.1-halfSize...$0.1+halfSize).map{v in v}.indexed()){
+            var subPixels = [SubPixel](repeating: SubPixel(), count: gridCount*gridCount)
+            
+            for (yy, xx) in product(0..<gridCount, 0..<gridCount){
+                subPixels[yy * gridCount + xx] = SubPixel(Double($0.y-halfSize + yy),
+                                                          Double($0.x-halfSize + xx),
+                                                           qkCqktMap: referenceMap!)
                 
-                subPixels[iy*configure.subSize+ix] = SubPixel(Double(y), Double(x), qkCqktMap: referenceMap!)
+            
+                
             }
-            return GeneralMatrix<SubPixel>(rows: configure.subSize, columns: configure.subSize, elements:subPixels)
+            return GeneralMatrix<SubPixel>(rows: gridCount, columns: gridCount, elements:subPixels)
         }
     }
     
@@ -191,24 +197,22 @@ class DICProject{
             throw fatalError("Roi is too large")
         }
         
-        let step =  configure.step
-        
-        
+//        let step =  configure.step
         
         let ys : [Int] =  (0 ... height).compactMap {
 //            top + halfSize + $0*(configure.subSize+configure.step)
-            let y = top + halfSize + $0 * (halfSize+1)
+            let y = top + halfSize + $0 * configure.step
             return y < bottom ? y : nil
         }
         
-        let xs :[Int] = (0 ... width).compactMap {
+        let xs : [Int] = (0 ... width).compactMap {
 //            left + halfSize + $0*(configure.subSize+configure.step)
-            let x = left + halfSize + $0 * (halfSize+1)
+            let x = left + halfSize + $0 * configure.step
             return x < right ? x : nil
             
         }
         
-        let gridCounts = configure.subSize / step
+        let gridCount = configure.subSize
         
         var seedCount = 0
         for (y, x) in product(ys, xs){
@@ -226,7 +230,7 @@ class DICProject{
 //        let qkMap = ReferenceMap(referenceMap: referenceMap!)
         let qkMap = referenceMap!
         
-        let roiSubsetActor = ROISubset(count: seeds.count, gridCount: gridCounts)
+        let roiSubsetActor = ROISubset(count: seeds.count, gridCount: gridCount)
 //
         await withThrowingTaskGroup(of: Void.self){ group in
             for (index, roi) in roiPoints!.indexed(){
@@ -234,17 +238,21 @@ class DICProject{
                 let column = roi.x
                 
                 group.addTask {
-                    var subPixels = [SubPixel](repeating: SubPixel(), count: gridCounts*gridCounts)
-                    for (yy, xx) in product(0..<gridCounts, 0..<gridCounts){
-                        subPixels[yy * gridCounts + xx] = SubPixel(Double(row-halfSize + yy*step),
-                                                                   Double(column-halfSize + xx*step),
-                                                                   qkCqktMap: qkMap)
-                        
+                    var subPixels = [SubPixel](repeating: SubPixel(), count: gridCount*gridCount)
+//                    for (yy, xx) in product(row-halfSize...row+halfSize, column-halfSize...column+halfSize){
+//                        subPixels[yy * gridCount + xx] = SubPixel(Double(yy),
+//                                                                   Double(xx),
+//                                                                   qkCqktMap: qkMap)
+//
+//                    }
+                    for ((iy, y), (ix, x)) in product((row-halfSize...row+halfSize).map{v in v}.indexed(),
+                                                      (column-halfSize...column+halfSize).map{v in v}.indexed()){
+                        subPixels[iy*gridCount+ix] = SubPixel(Double(y), Double(x), qkCqktMap: qkMap)
                     }
                     
                     await roiSubsetActor.setValueByIndex(index: index,
-                                                         value: GeneralMatrix<SubPixel>(rows: gridCounts,
-                                                                                        columns: gridCounts,
+                                                         value: GeneralMatrix<SubPixel>(rows: gridCount,
+                                                                                        columns: gridCount,
                                                                                         elements:subPixels))
                    
                 }
@@ -275,19 +283,21 @@ class DICProject{
             dfdxRef![row, column] = (nd * localCoef * dd)[0,0]
         }
         
+        let gridCount = configure.subSize
+        let halfsize = configure.subSize / 2
         
         ///parameters [u, v, du/dx, du/dy, dv/dx, dv/dy]
         ///
-        var refRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdyRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdxRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdudxRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdudyRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdvdxRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        var dfdvdyRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
-        hessanRoi = [Matrix<Double>](repeating: .init(rows: configure.subSize, columns: configure.subSize, repeatedValue: 0.0), count: roiPoints!.count)
+        var refRoi = [Matrix<Double>](repeating: .init(rows: gridCount, columns: gridCount, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdyRoi = [Matrix<Double>](repeating: .init(rows: gridCount, columns: gridCount, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdxRoi = [Matrix<Double>](repeating: .init(rows: gridCount, columns: gridCount, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdudxRoi = [Matrix<Double>](repeating: .init(rows: gridCount, columns: gridCount, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdudyRoi = [Matrix<Double>](repeating: .init(rows: gridCount, columns: gridCount, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdvdxRoi = [Matrix<Double>](repeating: .init(rows: gridCount, columns: gridCount, repeatedValue: 0.0), count: roiPoints!.count)
+        var dfdvdyRoi = [Matrix<Double>](repeating: .init(rows: gridCount, columns: gridCount, repeatedValue: 0.0), count: roiPoints!.count)
+        hessanRoi = [Matrix<Double>](repeating: .init(rows: gridCount, columns: gridCount, repeatedValue: 0.0), count: roiPoints!.count)
         
-        dfdpRoi = [GeneralMatrix<Matrix<Double>>] (repeating: GeneralMatrix<Matrix<Double>>(rows: configure.subSize, columns: configure.subSize, elements: [Matrix<Double>](repeating: Matrix<Double>(arrayLiteral: [0, 0, 0, 0, 0, 0]), count: configure.subSize*configure.subSize)), count: roiPoints!.count)
+        dfdpRoi = [GeneralMatrix<Matrix<Double>>] (repeating: GeneralMatrix<Matrix<Double>>(rows: gridCount, columns: gridCount, elements: [Matrix<Double>](repeating: Matrix<Double>(arrayLiteral: [0, 0, 0, 0, 0, 0]), count: gridCount*gridCount)), count: roiPoints!.count)
         
         
         for ii in 0 ..< roiPoints!.count{
@@ -297,8 +307,12 @@ class DICProject{
             else{
                 throw fatalError("reference is not a Int subset")
             }
-            let halfSize = configure.subSize / 2
-            refRoi[ii] = reference![Int(center.y)-halfSize ... Int(center.y)+halfSize, Int(center.x)-halfSize ... Int(center.x)+halfSize]
+            
+//            let value = Matrix<Double>(rows: gridCount, columns: gridCount) { row, column in
+//                reference![center.y-halfsize+row*configure.step, center.x-halfsize+column*configure.step]
+//            }
+            refRoi[ii] = reference![center.y-halfsize...center.y+halfsize, center.x-halfsize...center.x+halfsize]
+
             
             let ys = subset.ys
             let xs = subset.xs
@@ -307,11 +321,11 @@ class DICProject{
             
             
             let dfdyArray = subset.elements.map {dfdyRef![Int($0.y), Int($0.x)]}
-            let dfdy =  Matrix<Double>(rows: configure.subSize, columns: configure.subSize, grid: dfdyArray )
+            let dfdy =  Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdyArray )
             dfdyRoi[ii] = dfdy
             
             let dfdxArray = subset.elements.map {dfdxRef![Int($0.y), Int($0.x)]}
-            let dfdx = Matrix<Double>(rows: configure.subSize, columns: configure.subSize, grid: dfdxArray )
+            let dfdx = Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdxArray )
             dfdxRoi[ii] = dfdx
       
             dfdudyRoi[ii] = dfdx * dy
@@ -319,14 +333,12 @@ class DICProject{
             
             dfdvdyRoi[ii] = dfdy * dy
             dfdvdxRoi[ii] = dfdy * dx
-            
 
         }
         
         for ii in 0 ..< hessanRoi!.count{
-            
             var hessianValue : Matrix<Double> = .init(rows: 6, columns: 6, repeatedValue: 0.0)
-            for (row, column) in product(0..<configure.subSize, 0..<configure.subSize){
+            for (row, column) in product(0..<gridCount, 0..<gridCount){
                 let p  =  Matrix<Double>(row: [dfdxRoi[ii][row, column],
                                               dfdyRoi[ii][row, column],
                                               dfdudxRoi[ii][row, column],
@@ -362,12 +374,12 @@ class DICProject{
         }
         
         
-        let gridCount = configure.subSize / configure.step
+        let gridCount = configure.subSize
 
         
         dfdpRoi = [GeneralMatrix<Matrix<Double>>] (repeating: GeneralMatrix<Matrix<Double>>(rows: gridCount, columns: gridCount, elements: [Matrix<Double>](repeating: Matrix<Double>(arrayLiteral: [0, 0, 0, 0, 0, 0]), count: gridCount*gridCount)), count: roiPoints!.count)
         
-        let roiTaskGroup = ROITaskGroup(roiPoints: roiPoints!, roiSubsets: roiSubsets!, reference: reference!, gridCount: gridCount, halfSize: configure.subSize/2, dfdxRef: dfdxRef!, dfdyRef: dfdyRef!)
+        let roiTaskGroup = ROITaskGroup(roiPoints: roiPoints!, roiSubsets: roiSubsets!, reference: reference!, halfSize: configure.subSize/2, dfdxRef: dfdxRef!, dfdyRef: dfdyRef!)
         
        
         guard let hessan = try? await roiTaskGroup.calculateHassien(),
@@ -379,9 +391,6 @@ class DICProject{
         
         hessanRoi = hessan
         dfdpRoi = dfdp
-        
-        
-            
         
     }
     
@@ -423,6 +432,8 @@ class DICProject{
         var deformVector = [[Double]](repeating:[Double](repeating: 0.0, count: 6), count: roiPoints!.count)
         
         let halfsize = configure.subSize/2
+        let gridCount = configure.subSize
+        
         let y0 = roiPoints![0].y
         let x0 = roiPoints![0].x
         
@@ -473,7 +484,7 @@ class DICProject{
                 
                 let deformList = zip(newYs, newXs).map {SubPixel($0.0, $0.1, qkCqktMap: currentMap!)}
                 
-                let deformSubset = GeneralMatrix<SubPixel>(rows: configure.subSize, columns: configure.subSize, elements: deformList)
+                let deformSubset = GeneralMatrix<SubPixel>(rows: gridCount, columns: gridCount, elements: deformList)
                 
                 let normalizedDiff = normalize(subset.values()) - normalize(deformSubset.values())
                 
@@ -515,7 +526,7 @@ class DICProject{
         }
         deformVectorRoi!.append(deformVector)
         
-//        print(deformVector)
+        print(deformVector)
       
     }
     
@@ -524,7 +535,7 @@ class DICProject{
         precondition(initialGuess.count == 6)
         var guesses: [[Double]]
         let halfsize = configure.subSize/2
-        let gridCount = configure.subSize / configure.step
+        let gridCount = configure.subSize
         
         if deformVectorRoi == nil{
             deformVectorRoi = [[[Double]]]()
@@ -536,6 +547,7 @@ class DICProject{
             let (initial_y, initial_x) = normalizedCrossCorrelation(lhs: templ, rhs: currents![0])
         
             guesses = [[Double]](repeating: [Double(initial_x-x0), Double(initial_y-y0), 0,0,0,0], count: roiSubsets!.count)
+            print(initial_x-x0,initial_y-y0)
         }
         
         else{
@@ -563,7 +575,7 @@ class DICProject{
         
         await deformVectorRoi!.append(deformVectorActor.toArray())
         
-        await print(deformVectorActor.toArray())
+//        await print(deformVectorActor.toArray())
     }
 }
     
@@ -574,19 +586,7 @@ struct DICConfigure{
     let step: Int
     
 }
-//
-//actor ReferenceMap{
-//    let referenceMap: GeneralMatrix<Matrix<Double>>
-//    init(referenceMap: GeneralMatrix<Matrix<Double>>)
-//    {
-//        self.referenceMap = referenceMap
-//    }
-//
-//    nonisolated func getMap() -> GeneralMatrix<Matrix<Double>>
-//    {
-//         referenceMap
-//    }
-//}
+
 
 actor ROISubset{
     var roiSubsets: [GeneralMatrix<SubPixel>]

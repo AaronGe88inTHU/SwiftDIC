@@ -16,16 +16,16 @@ struct ROITaskGroup{
     let roiPoints: [(y:Int, x:Int)]
     let roiSubsets: [GeneralMatrix<SubPixel>]
     let reference : Matrix<Double>
-    let gridCount: Int
     let halfSize: Int
     var dfdxRef: Matrix<Double>
     var dfdyRef: Matrix<Double>
+    
+    let gridCount: Int
     fileprivate var dfdpRoi: DfdpROI
     
     init(roiPoints: [(y:Int, x:Int)],
          roiSubsets:  [GeneralMatrix<SubPixel>],
          reference : Matrix<Double>,
-         gridCount: Int,
          halfSize:Int,
          dfdxRef: Matrix<Double>,
          dfdyRef: Matrix<Double>)
@@ -33,11 +33,12 @@ struct ROITaskGroup{
         self.roiPoints = roiPoints
         self.roiSubsets = roiSubsets
         self.reference = reference
-        self.gridCount = gridCount
         self.halfSize = halfSize
         self.dfdxRef = dfdxRef
         self.dfdyRef = dfdyRef
-        dfdpRoi = DfdpROI(gridCount: gridCount, count: roiPoints.count)
+        self.gridCount = 2*halfSize+1
+        self.dfdpRoi = DfdpROI(gridCount: gridCount, count: roiPoints.count)
+        
     }
     
     
@@ -47,20 +48,14 @@ struct ROITaskGroup{
         
         //        var results: [ROIDeformVector]
 
-        let step = (2 * halfSize + 1) / gridCount
         let result = try await withThrowingTaskGroup(of: (Int, Matrix<Double>).self,
                                                      returning: [(Int, Matrix<Double>)].self) { group in
             for ii in 0 ..< roiPoints.count{
                 let x = roiPoints[ii].x
                 let y = roiPoints[ii].y
                 let subset = roiSubsets[ii]
-                let roiArray = [Double](repeating: 0, count: gridCount*gridCount)
-//                for (yy, xx) in product(0..<gridCount, 0..<gridCount){
-//                    roiArray[yy * gridCount + xx] =
-//                }
-                let roi = Matrix<Double>(rows: gridCount, columns: gridCount) { row, column in
-                    reference[y-halfSize+row*step, x-halfSize+column*step]
-                }
+                
+                let roi = reference[y-halfSize...y+halfSize, x-halfSize...x+halfSize]
                 
                 group.addTask {
                     let value = try await calculateDeformVectorAsync(y: y, x: x, gridCount: gridCount, subset: subset, dfdyRef: dfdyRef, dfdxRef: dfdxRef)
@@ -86,7 +81,7 @@ struct ROITaskGroup{
     
     
     
-    private func calculateDeformVectorAsync(y:Int, x:Int,
+     func calculateDeformVectorAsync(y:Int, x:Int,
                                             gridCount: Int, subset: GeneralMatrix<SubPixel>,
                                             dfdyRef: Matrix<Double>, dfdxRef: Matrix<Double>) async throws -> ROIDeformVector
     {
@@ -144,8 +139,6 @@ struct ROITaskGroup{
             return hassien * 2 / refRoi.variant()
         }
     }
-    
-    
     
 }
 

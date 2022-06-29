@@ -167,37 +167,39 @@ struct InterpolatedMap{
 
         let kernal_b_x_fft:([Double], [Double]) = dft(kernal_b_x)!
         let kernal_b_y_fft:([Double], [Double]) = dft(kernal_b_y)!
+        let rowResults = Vectors(count: height, length: width)
         
-        
-        let rowResults =  try await withThrowingTaskGroup(of: (Int, [Double]).self, returning: [(Int, [Double])].self) { group  in
+        await withThrowingTaskGroup(of: Void.self) { group  in
             for ii in 0 ..< height{
                 let row = gs[row: ii]
                 group.addTask {
-                    Interpolate1D(index: ii, vector: row, length: gs.columns, kernal: kernal_b_x_fft)
+                    let value = Interpolate1D(vector: row, length: gs.columns, kernal: kernal_b_x_fft)
+                    await rowResults.setValueByIndex(index: ii, value: value)
                 }
             }
-            
-            return try await group.collect()
         }
         
-        let rows = rowResults.sorted(by: {$0.0 < $1.0}).map{$0.1}
+        let rows = await rowResults.toArray()
         
         for ii in 0 ..< gs.rows{
             coef[row: ii] = rows[ii]
         }
         
-        let columnResults = try await withThrowingTaskGroup(of: (Int, [Double]).self, returning: [(Int, [Double])].self){ group in
+        
+        let columnResults = Vectors(count: width, length: height)
+        await withThrowingTaskGroup(of: Void.self){ group in
             for ii in 0 ..< width{
                 let column = coef[column: ii]
                 group.addTask {
-                    Interpolate1D(index: ii, vector: column, length: gs.rows, kernal: kernal_b_y_fft)
+                    let value = Interpolate1D(vector: column, length: gs.rows, kernal: kernal_b_y_fft)
+                    await columnResults.setValueByIndex(index: ii, value: value)
                 }
             }
             
-            return try await group.collect()
+          
         }
         
-        let columns = columnResults.sorted(by: {$0.0 < $1.0}).map{$0.1}
+        let columns = await columnResults.toArray()
         
         for ii in 0 ..< gs.columns{
             coef[column: ii] = columns[ii]
@@ -218,16 +220,17 @@ struct InterpolatedMap{
         let bmap = bSplineCoefMap()
         for (y, x) in product(rows, columns){
             qkCqk[y, x] = (qk * bmap[(y-2 ... y+3), (x-2 ... x+3)] * qkt)
+//            print(qkCqk[y, x], (qk * bmap[(y-2 ... y+3), (x-2 ... x+3)] * qkt))
         }
-        
+//        print(qkCqk)
         return qkCqk
     }
     
     
     public func qkCqktAsync () async throws -> GeneralMatrix<Matrix<Double>>{
         var qkCqk = GeneralMatrix<Matrix<Double>>(rows: gs.rows,
-                                                 columns: gs.columns,
-                                                  elements: .init(repeating: .init(rows: 6, columns: 6, repeatedValue: 0.0),
+                                                  columns: gs.columns,
+                                                  elements: .init(repeating: .init(rows: 6, columns: 6, repeatedValue: 0),
                                                                   count: gs.rows*gs.columns))
         let rows = (2 ..< qkCqk.rows-3).map {$0}
         let columns = (2 ..< qkCqk.columns-3).map{$0}
@@ -263,35 +266,4 @@ struct InterpolatedMap{
     
    
     
-    private func Interpolate1D (index: Int, vector: [Double], length: Int, kernal: ([Double], [Double])) -> (Int, [Double]){
-        var rowFft: ([Double], [Double]) = dft(vector)!
-
-        var cdft = ([Double](repeating: 0, count: length), [Double](repeating: 0, count: length))
-        var kernal_fft = kernal
-       
-        //MARK: Accelerate methods
-        //Start********************************************************************************************
-        
-        rowFft.0.withUnsafeMutableBufferPointer { arealPtr in
-            rowFft.1.withUnsafeMutableBufferPointer { aimagPtr in
-                kernal_fft.0.withUnsafeMutableBufferPointer { brealPtr in
-                    kernal_fft.1.withUnsafeMutableBufferPointer { bimagPtr in
-                        cdft.0.withUnsafeMutableBufferPointer { crealPtr in
-                            cdft.1.withUnsafeMutableBufferPointer { cimagPtr in
-                                let aSplitComplex = DSPDoubleSplitComplex(realp: arealPtr.baseAddress!,
-                                                                    imagp: aimagPtr.baseAddress!)
-                                let bSplitComplex = DSPDoubleSplitComplex(realp: brealPtr.baseAddress!,
-                                                                    imagp: bimagPtr.baseAddress!)
-                                var cSplitComplex = DSPDoubleSplitComplex(realp: crealPtr.baseAddress!,
-                                                                    imagp: cimagPtr.baseAddress!)
-
-                                vDSP.divide(aSplitComplex, by: bSplitComplex, count: gs.columns, result: &cSplitComplex)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return (index, idft(cdft)!)
-    }
 }
