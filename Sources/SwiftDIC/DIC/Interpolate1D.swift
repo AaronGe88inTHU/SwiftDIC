@@ -43,21 +43,3 @@ public func Interpolate1D (vector: [Double], length: Int,
     return idft(cdft)!
 }
 
-actor Vectors{
-    var vectors : [[Double]]
-    init(count: Int, length: Int) {
-        vectors = [[Double]](repeating: .init(repeating: 0, count: length), count: count)
-    }
-    
-    init(vectors: [[Double]]) {
-        self.vectors = vectors
-    }
-    
-    public func setValueByIndex(index: Int, value: [Double]){
-        vectors[index] = value
-    }
-    
-    public func toArray() -> [[Double]]{
-        vectors
-    }
-}

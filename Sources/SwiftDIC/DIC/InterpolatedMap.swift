@@ -167,7 +167,7 @@ struct InterpolatedMap{
 
         let kernal_b_x_fft:([Double], [Double]) = dft(kernal_b_x)!
         let kernal_b_y_fft:([Double], [Double]) = dft(kernal_b_y)!
-        let rowResults = Vectors(count: height, length: width)
+        let rowResults = VectorsActor(count: height, length: width)
         
         await withThrowingTaskGroup(of: Void.self) { group  in
             for ii in 0 ..< height{
@@ -186,7 +186,7 @@ struct InterpolatedMap{
         }
         
         
-        let columnResults = Vectors(count: width, length: height)
+        let columnResults = VectorsActor(count: width, length: height)
         await withThrowingTaskGroup(of: Void.self){ group in
             for ii in 0 ..< width{
                 let column = coef[column: ii]

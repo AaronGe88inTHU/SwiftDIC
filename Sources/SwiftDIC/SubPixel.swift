@@ -38,10 +38,6 @@ struct SubPixel : DefaultInitializable{
             self.x = column
         }
         
-        
-        //calculate subPix
-//        let localCoef = qkCqktMap[( Int(floor(y))-2 ... Int(floor(y))+3),
-//                                  (Int(floor(x))-2 ... Int(floor(x))+3)]
         let localCoef = qkCqktMap [Int(floor(y)), Int(floor(x))]
         
         //
@@ -49,8 +45,7 @@ struct SubPixel : DefaultInitializable{
         let dy = y - floor(y)
         let yy = Matrix<Double>(rows: 1, columns: 6, grid: (0 ... 5).map{pow(dy, Double($0))})
         let xx = Matrix<Double>(rows: 6, columns: 1, grid:  (0 ... 5).map{pow(dx, Double($0))})
-//        let qk = Matrix<Double>.qk
-//        let qkt = transpose(qk)
+
         var result = yy * localCoef * xx
         assert(result.columns == 1, "Value should be a scalar")
         assert(result.rows == 1, "Value should be a scalar")

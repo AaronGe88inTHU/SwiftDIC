@@ -8,11 +8,6 @@ import Accelerate
 @available(iOS 15.0, *)
 final class SwiftDICTests: XCTestCase {
     
-    //    let reference = Matrix<Double>(rows: 1040, columns: 400, repeatedValue: 0)
-    //    let currents = (0 ... 20).map {Matrix(rows: 1040, columns: 400, repeatedValue: Double($0))}
-    //    let project = DICProject(reference: Matrix<Double>.random(rows: 256, columns: 128, in: 0...1) ,
-    //                                 currents: (0 ... 20).map { _ in Matrix<Double>.random(rows: 256, columns: 128, in: 0...1)})
-    
     
     func test_fftable() throws{
         
@@ -76,7 +71,7 @@ final class SwiftDICTests: XCTestCase {
         
         let qkCqkt = interpolatedMatrix.qkCqkt()
         
-        let qkCqktAsync = try await interpolatedMatrix.qkCqktAsync()
+//        let qkCqktAsync = try await interpolatedMatrix.qkCqktAsync()
         
         let bmap = interpolatedMatrix.bSplineCoefMap()
         let bmapAsync = try await interpolatedMatrix.bSplineCoefMapAsync()
@@ -166,7 +161,7 @@ final class SwiftDICTests: XCTestCase {
         let project = DICProject(reference: reference ,
                                  currents: (0 ... 20).map { _ in Matrix<Double>.random(rows: 300, columns: 400, in: 0...1)})
         
-        try project.config(configure: .init(subSize: 41, step: 41))
+        try project.config(configure: .init(subSize: 21, step: 21/2, left: 50, bottom: 280, right: 350 ))
         
        
         
@@ -174,7 +169,7 @@ final class SwiftDICTests: XCTestCase {
         let projectAsync = DICProject(reference: reference ,
                                       currents: (0 ... 20).map { _ in Matrix<Double>.random(rows: 300, columns: 400, in: 0...1)})
         
-        try await projectAsync.configAsync(configure: .init(subSize: 41, step: 41))
+        try await projectAsync.configAsync(configure: .init(subSize: 21, step: 21/2, left: 50, bottom: 280, right: 350 ))
         
 //        XCTAssertEqual(projectAsync.referenceMap!.rows, project.referenceMap!.rows)
 //        XCTAssertEqual(projectAsync.referenceMap!.columns, project.referenceMap!.columns)
@@ -184,6 +179,11 @@ final class SwiftDICTests: XCTestCase {
             
         }
         
+        for ii in 0..<project.roiPoints!.count{
+            XCTAssertEqual(project.roiPoints![ii].y, projectAsync.roiPoints![ii].y)
+            XCTAssertEqual(project.roiPoints![ii].x, projectAsync.roiPoints![ii].x)
+        }
+        
     }
     
     func test_projectPrecompute() async throws{
@@ -191,8 +191,9 @@ final class SwiftDICTests: XCTestCase {
                                  currents: (0 ... 20).map { _ in Matrix<Double>.random(rows: 1024, columns: 1024, in: 0...1)})
         
         var startTime = CFAbsoluteTimeGetCurrent()
-        try project.config(configure: .init(subSize: 41, step: 41))
+        try project.config(configure: .init(subSize: 41, step: 41/2, left: 50, bottom: 280, right: 350 ))
         try project.preComputerRef()
+        try project.preComputeCur(0)
         
         var timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
         print("Time elapsed for benckmark: \(timeElapsed) s.")
@@ -200,34 +201,22 @@ final class SwiftDICTests: XCTestCase {
         let projectAsync = project
         startTime = CFAbsoluteTimeGetCurrent()
         
-        try await projectAsync.configAsync(configure: .init(subSize: 41, step: 41))
+        try await projectAsync.configAsync(configure: .init(subSize: 41, step: 41/2, left: 50, bottom: 280, right: 350 ))
         try await projectAsync.preComputerRefAsync()
+        try await projectAsync.preComputeCurAsync(0)
         timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
         print(" Time elapsed for Concurrency: \(timeElapsed) s.")
         for ii in 0..<projectAsync.hessanRoi!.count{
             XCTAssertEqual(project.hessanRoi![ii], projectAsync.hessanRoi![ii])
+            for (y, x) in product(0..<project.currentMap!.rows, 0..<project.currentMap!.columns){
+                XCTAssertEqual(project.currentMap![y, x], projectAsync.currentMap![y, x])
+            }
         }
         
     }
     
    
     
-    func test_createImage() throws{
-        guard let refImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_01.tif"),
-              let curImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_02.tif"),
-              let ref = refImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let cur = curImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        else{
-            throw fatalError("Bad file")
-        }
-        
-        guard let refGs = try? convertColorImage2GrayScaleMatrix(cgImage: ref),
-              let curGs = try? convertColorImage2GrayScaleMatrix(cgImage: cur)
-        else{
-            throw fatalError()
-        }
-        
-    }
     
     func test_templateMatching() throws{
         guard let refImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_01.tif"),
@@ -273,7 +262,7 @@ final class SwiftDICTests: XCTestCase {
         
         let project = DICProject(reference: reference,
                                  currents:[current])
-        try project.config(configure: .init(subSize: 41, step: 41))
+        try project.config(configure: .init(subSize: 41, step: 41/2, left: 50, bottom: 280, right: 350 ))
         try project.preComputerRef()
         let expected = project.dfdpRoi!
         
@@ -296,42 +285,51 @@ final class SwiftDICTests: XCTestCase {
     
     func test_iterativeComputeAsync() async throws{
         
-        guard let refImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_01.tif"),
-              let curImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_02.tif"),
+        guard let refImage = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_00.tif"),
+              let cur1Image = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_01.tif"),
+              let cur2Image = CPImage(contentsOfFile: "/Users/aaronge/Documents/GitHub/SwiftDIC/ohtcfrp_02.tif"),
               let ref = refImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let cur = curImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
+              let cur1 = cur1Image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let cur2 = cur2Image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else{
             throw fatalError("Bad file")
         }
         
         guard let reference = try? convertColorImage2GrayScaleMatrix(cgImage: ref),
-              let current = try? convertColorImage2GrayScaleMatrix(cgImage: cur)
+              let current1 = try? convertColorImage2GrayScaleMatrix(cgImage: cur1),
+              let current2 = try? convertColorImage2GrayScaleMatrix(cgImage: cur2)
         else{
             throw fatalError()
         }
         
         var startTime = CFAbsoluteTimeGetCurrent()
         let project = DICProject(reference: reference,
-                                 currents:[current])
-        try project.config(configure: .init(subSize: 41, step:21))
-        try project.preComputerRef()
-        try project.preComputeCur(index: 0)
-        try project.iterativeSearch(initialGuess: [0.0, 0, 0.0, 0.0, 0.0, 0.0])
+                                 currents:[current1, current2])
+        try  project.config(configure: .init(subSize: 21, step: 20, top: 80, left: 50, bottom: 280, right: 350 ))
+        try  project.preComputerRef()
+        for ii in 0...1{
+            try  project.preComputeCur(ii)
+            try  project.iterativeSearch(ii)
+        }
         var timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
         print("Time elapsed for benckmark: \(timeElapsed) s.")
         
         startTime = CFAbsoluteTimeGetCurrent()
         let projectAsync = DICProject(reference: reference,
-                                 currents:[current])
-        try await projectAsync.configAsync(configure: .init(subSize: 41, step: 21))
+                                 currents:[current1, current2])
+        try await projectAsync.configAsync(configure: .init(subSize: 21, step: 20, top: 80, left: 50, bottom: 280, right: 350 ))
         try await projectAsync.preComputerRefAsync()
-        try await projectAsync.preComputeCurAsync(index: 0)
-        try await projectAsync.iterativeSearchAsync(initialGuess: [0.0, 0, 0.0, 0.0, 0.0, 0.0])
+        for ii in 0...1{
+            try await projectAsync.preComputeCurAsync(ii)
+            try await projectAsync.iterativeSearchAsync(ii)
+        }
+       
         timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
         print("Time elapsed for Concurrency: \(timeElapsed) s.")
-//        XCTAssertEqual(project.deformVectorRoi![0], projectAsync.deformVectorRoi![0], accuracy: 0.1)
+        
 
     }
+    
     
     
 }

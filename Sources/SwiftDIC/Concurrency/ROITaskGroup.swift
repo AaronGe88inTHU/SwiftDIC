@@ -14,7 +14,7 @@ import Algorithms
 struct ROITaskGroup{
     
     let roiPoints: [(y:Int, x:Int)]
-    let roiSubsets: [GeneralMatrix<SubPixel>]
+//    let roiSubsets: [GeneralMatrix<SubPixel>]
     let reference : Matrix<Double>
     let halfSize: Int
     var dfdxRef: Matrix<Double>
@@ -24,14 +24,14 @@ struct ROITaskGroup{
     fileprivate var dfdpRoi: DfdpROI
     
     init(roiPoints: [(y:Int, x:Int)],
-         roiSubsets:  [GeneralMatrix<SubPixel>],
+//         roiSubsets:  [GeneralMatrix<SubPixel>],
          reference : Matrix<Double>,
          halfSize:Int,
          dfdxRef: Matrix<Double>,
          dfdyRef: Matrix<Double>)
     {
         self.roiPoints = roiPoints
-        self.roiSubsets = roiSubsets
+//        self.roiSubsets = roiSubsets
         self.reference = reference
         self.halfSize = halfSize
         self.dfdxRef = dfdxRef
@@ -46,56 +46,74 @@ struct ROITaskGroup{
     
     public func calculateHassien() async throws ->  [Matrix<Double>] {
         
-        //        var results: [ROIDeformVector]
+        let results: MatrixsActor = .init(count: roiPoints.count)
 
-        let result = try await withThrowingTaskGroup(of: (Int, Matrix<Double>).self,
-                                                     returning: [(Int, Matrix<Double>)].self) { group in
+        await withThrowingTaskGroup(of: Void.self) { group in
             for ii in 0 ..< roiPoints.count{
                 let x = roiPoints[ii].x
                 let y = roiPoints[ii].y
-                let subset = roiSubsets[ii]
+//                let subset = roiSubsets[ii]
                 
                 let roi = reference[y-halfSize...y+halfSize, x-halfSize...x+halfSize]
                 
                 group.addTask {
-                    let value = try await calculateDeformVectorAsync(y: y, x: x, gridCount: gridCount, subset: subset, dfdyRef: dfdyRef, dfdxRef: dfdxRef)
+                    let value = try await calculateDeformVectorAsync(y: y, x: x, gridCount: gridCount, //subset: subset,
+                                                                     dfdyRef: dfdyRef, dfdxRef: dfdxRef)
                     
                     
                     let hassien = try await calculateHassiensAsync(ii, defVec: value, refRoi: roi)
-                    
-                    return (ii, hassien)
+                    await results.setIndividualValue(ii, hassien)
                 }
             }
             
-            return try await group.collect()
         }
-        return result.sorted(by: {$0.0 < $1.0}).map {$0.1}
+        return await results.toArray()
         
     }
     
     public var dfdp: [GeneralMatrix<Matrix<Double>>]{
         get async throws{
-            await dfdpRoi.getValue()
+            await dfdpRoi.toArray()
         }
     }
     
     
     
      func calculateDeformVectorAsync(y:Int, x:Int,
-                                            gridCount: Int, subset: GeneralMatrix<SubPixel>,
+                                            gridCount: Int,// subset: GeneralMatrix<SubPixel>,
                                             dfdyRef: Matrix<Double>, dfdxRef: Matrix<Double>) async throws -> ROIDeformVector
     {
-        precondition(subset.isIntSubset)
+//        precondition(subset.isIntSubset)
         
-        let ys = subset.ys
-        let xs = subset.xs
-        let dy = ys - Double(y)
-        let dx = xs - Double(x)
+//        let ys = subset.ys
+//        let xs = subset.xs
+//        let dy = ys - Double(y)
+//        let dx = xs - Double(x)
         
-        let dfdyArray = subset.elements.map {dfdyRef[Int($0.y), Int($0.x)]}
-        let dfdy =  Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdyArray )
-        let dfdxArray = subset.elements.map {dfdxRef[Int($0.y), Int($0.x)]}
-        let dfdx = Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdxArray )
+        let dx = Matrix<Double>.hValues(halfsize: gridCount/2)
+        let dy = transpose(dx)
+        
+        let ys = dy + Double(y)
+        let xs = dx + Double(x)
+        
+        
+        var dfdy =  Matrix<Double>(rows: gridCount, columns: gridCount,repeatedValue: 0)
+        var dfdx = Matrix<Double>(rows: gridCount, columns: gridCount, repeatedValue: 0)
+        
+        for (row, column) in product(0..<gridCount, 0..<gridCount){
+            dfdy[row, column] = dfdyRef[Int(ys[row, column]), Int(xs[row, column])]
+            dfdx[row, column] = dfdxRef[Int(ys[row, column]), Int(xs[row, column])]
+        }
+        
+       
+        
+//        subset.elements.map {}
+
+        
+//        let dfdyArray = subset.elements.map {dfdyRef[Int($0.y), Int($0.x)]}
+//        let dfdy =  Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdyArray )
+//        let dfdxArray = subset.elements.map {dfdxRef[Int($0.y), Int($0.x)]}
+//        let dfdx = Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdxArray )
         
         
         return  ROIDeformVector(dfdx: dfdx, dfdy: dfdy,
@@ -107,10 +125,9 @@ struct ROITaskGroup{
     
     private func calculateHassiensAsync(_ index: Int, defVec: ROIDeformVector, refRoi: Matrix<Double>) async throws -> Matrix<Double> {
         
-        //        var hessianValue : Matrix<Double> = .init(rows: 6, columns: 6, repeatedValue: 0.0)
-//        let  dfdpROI = DfdpROI(halfSize: halfSize)
         
-        return try await withThrowingTaskGroup(of: Matrix<Double>.self,
+//        let pMatrix = PMatrix(count: <#T##Int#>)
+         try await withThrowingTaskGroup(of: Matrix<Double>.self,
                                                returning: Matrix<Double>.self) { group in
             
             for (row, column) in product(0..<gridCount, 0..<gridCount){
@@ -166,10 +183,34 @@ fileprivate actor DfdpROI{
         dfdp[index][row, column] = value
     }
     
-    func getValue () ->  [GeneralMatrix<Matrix<Double>>]{
+    func toArray () ->  [GeneralMatrix<Matrix<Double>>]{
         return dfdp
     }
     
     
 }
 
+fileprivate actor MatrixsActor{
+    private var matrixs : [Matrix<Double>]
+    init(count: Int)
+    {
+        self.matrixs = .init(repeating: Matrix<Double>(rows: 6, columns: 6, repeatedValue: 0), count: count)
+    }
+    
+    init(_ matrixs: [Matrix<Double>])
+    {
+        self.matrixs = matrixs
+    }
+    
+    
+    func setIndividualValue(_ index: Int, _ value: Matrix<Double>)
+    {
+       matrixs[index] = value
+    }
+    
+    func toArray () -> [Matrix<Double>]{
+        return matrixs
+    }
+    
+    
+}

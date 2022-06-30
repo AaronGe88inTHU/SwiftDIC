@@ -45,7 +45,7 @@ class DICProject{
     
     public init(reference: Matrix<Double>?=nil,
                 currents: [Matrix<Double>]? = nil,
-                configure: DICConfigure = DICConfigure(subSize: 41, step: 7)) {
+                configure: DICConfigure = DICConfigure(subSize: 41, step: 7,bottom: 100, right: 100)) {
         self.reference = reference
         self.currents = currents
         self.configure = configure
@@ -71,7 +71,7 @@ class DICProject{
         
         
         
-        try subsetGenerator(bottom: reference!.rows-20, right: reference!.columns-20)
+        try subsetGenerator(top: configure.top, left: configure.left, bottom: configure.bottom, right: configure.right)
         
         
         
@@ -83,7 +83,10 @@ class DICProject{
         centerAvailableColumns = (configure.subSize/2+1 ... reference!.columns - configure.subSize/2-1)
         
         try await paddingToFftableAsync()
-        try await subsetGeneratorAsync(bottom: reference!.rows-20, right: reference!.columns-20)
+        try await subsetGeneratorAsync(top: configure.top,
+                                       left: configure.left,
+                                       bottom: configure.bottom,
+                                       right: configure.right)
 //
         
     }
@@ -136,7 +139,7 @@ class DICProject{
         let height = bottom - top
         let width = right - left
         let halfSize: Int = configure.subSize/2
-        let gridCount = configure.subSize
+//        let gridCount = configure.subSize
 //
         var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1))
         guard seeds.count > 0
@@ -166,23 +169,23 @@ class DICProject{
             }
         }
         
-        seeds = seeds.dropLast(seeds.count - seedCount)
-        roiPoints = seeds
-    
-        //TODO: structure concurrency
-        roiSubsets = roiPoints!.map{
-            var subPixels = [SubPixel](repeating: SubPixel(), count: gridCount*gridCount)
-            
-            for (yy, xx) in product(0..<gridCount, 0..<gridCount){
-                subPixels[yy * gridCount + xx] = SubPixel(Double($0.y-halfSize + yy),
-                                                          Double($0.x-halfSize + xx),
-                                                           qkCqktMap: referenceMap!)
-                
-            
-                
-            }
-            return GeneralMatrix<SubPixel>(rows: gridCount, columns: gridCount, elements:subPixels)
-        }
+        roiPoints = seeds.dropLast(seeds.count - seedCount)
+//        roiPoints = seeds
+//
+//        //TODO: structure concurrency
+//        roiSubsets = roiPoints!.map{
+//            var subPixels = [SubPixel](repeating: SubPixel(), count: gridCount*gridCount)
+//
+//            for (yy, xx) in product(0..<gridCount, 0..<gridCount){
+//                subPixels[yy * gridCount + xx] = SubPixel(Double($0.y-halfSize + yy),
+//                                                          Double($0.x-halfSize + xx),
+//                                                           qkCqktMap: referenceMap!)
+//
+//
+//
+//            }
+//            return GeneralMatrix<SubPixel>(rows: gridCount, columns: gridCount, elements:subPixels)
+//        }
     }
     
     private func subsetGeneratorAsync(top: Int=20, left: Int=20, bottom: Int, right: Int) async throws{
@@ -190,7 +193,6 @@ class DICProject{
         let height = bottom - top
         let width = right - left
         let halfSize: Int = configure.subSize/2
-//        var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1) / (4*halfSize * halfSize))
         var seeds = [(y: Int, x: Int)](repeating: (-1, -1), count: (height+1) * (width+1))
         guard seeds.count > 0
         else{
@@ -212,7 +214,7 @@ class DICProject{
             
         }
         
-        let gridCount = configure.subSize
+//        let gridCount = configure.subSize
         
         var seedCount = 0
         for (y, x) in product(ys, xs){
@@ -222,44 +224,38 @@ class DICProject{
             }
         }
         
-        seeds = seeds.dropLast(seeds.count - seedCount)
-        roiPoints = seeds
+        roiPoints = seeds.dropLast(seeds.count - seedCount)
+
         
         //TODO: structure concurrency
         
-//        let qkMap = ReferenceMap(referenceMap: referenceMap!)
-        let qkMap = referenceMap!
+//        let qkMap = referenceMap!
         
-        let roiSubsetActor = ROISubset(count: seeds.count, gridCount: gridCount)
+//        let roiSubsetActor = ROISubset(count: seeds.count, gridCount: gridCount)
+////
+//        await withThrowingTaskGroup(of: Void.self){ group in
+//            for (index, roi) in roiPoints!.indexed(){
+//                let row = roi.y
+//                let column = roi.x
 //
-        await withThrowingTaskGroup(of: Void.self){ group in
-            for (index, roi) in roiPoints!.indexed(){
-                let row = roi.y
-                let column = roi.x
-                
-                group.addTask {
-                    var subPixels = [SubPixel](repeating: SubPixel(), count: gridCount*gridCount)
-//                    for (yy, xx) in product(row-halfSize...row+halfSize, column-halfSize...column+halfSize){
-//                        subPixels[yy * gridCount + xx] = SubPixel(Double(yy),
-//                                                                   Double(xx),
-//                                                                   qkCqktMap: qkMap)
-//
+//                group.addTask {
+//                    var subPixels = [SubPixel](repeating: SubPixel(), count: gridCount*gridCount)
+////
+//                    for ((iy, y), (ix, x)) in product((row-halfSize...row+halfSize).map{v in v}.indexed(),
+//                                                      (column-halfSize...column+halfSize).map{v in v}.indexed()){
+//                        subPixels[iy*gridCount+ix] = SubPixel(Double(y), Double(x), qkCqktMap: qkMap)
 //                    }
-                    for ((iy, y), (ix, x)) in product((row-halfSize...row+halfSize).map{v in v}.indexed(),
-                                                      (column-halfSize...column+halfSize).map{v in v}.indexed()){
-                        subPixels[iy*gridCount+ix] = SubPixel(Double(y), Double(x), qkCqktMap: qkMap)
-                    }
-                    
-                    await roiSubsetActor.setValueByIndex(index: index,
-                                                         value: GeneralMatrix<SubPixel>(rows: gridCount,
-                                                                                        columns: gridCount,
-                                                                                        elements:subPixels))
-                   
-                }
-            }
-            
-        }
-        roiSubsets = await roiSubsetActor.toArray()
+//
+//                    await roiSubsetActor.setValueByIndex(index: index,
+//                                                         value: GeneralMatrix<SubPixel>(rows: gridCount,
+//                                                                                        columns: gridCount,
+//                                                                                        elements:subPixels))
+//
+//                }
+//            }
+//
+//        }
+//        roiSubsets = await roiSubsetActor.toArray()
         
     }
     
@@ -302,30 +298,40 @@ class DICProject{
         
         for ii in 0 ..< roiPoints!.count{
             let center = roiPoints![ii]
-            let subset = roiSubsets![ii]
-            guard subset.isIntSubset
-            else{
-                throw fatalError("reference is not a Int subset")
-            }
-            
-//            let value = Matrix<Double>(rows: gridCount, columns: gridCount) { row, column in
-//                reference![center.y-halfsize+row*configure.step, center.x-halfsize+column*configure.step]
+//            let subset = roiSubsets![ii]
+//            guard subset.isIntSubset
+//            else{
+//                throw fatalError("reference is not a Int subset")
 //            }
+            
             refRoi[ii] = reference![center.y-halfsize...center.y+halfsize, center.x-halfsize...center.x+halfsize]
 
             
-            let ys = subset.ys
-            let xs = subset.xs
-            let dy = ys - Double(center.y)
-            let dx = xs - Double(center.x)
+//            let ys = subset.ys
+//            let xs = subset.xs
+//            let dy = ys - Double(center.y)
+//            let dx = xs - Double(center.x)
+            
+            let dx = Matrix<Double>.hValues(halfsize: gridCount/2)
+            let dy = transpose(dx)
+            let ys = dy + Double(center.y)
+            let xs = dx + Double(center.x)
+            
+            var dfdy =  Matrix<Double>(rows: gridCount, columns: gridCount,repeatedValue: 0)
+            var dfdx = Matrix<Double>(rows: gridCount, columns: gridCount, repeatedValue: 0)
+            
+            for (row, column) in product(0..<gridCount, 0..<gridCount){
+                dfdy[row, column] = dfdyRef![Int(ys[row, column]), Int(xs[row, column])]
+                dfdx[row, column] = dfdxRef![Int(ys[row, column]), Int(xs[row, column])]
+            }
             
             
-            let dfdyArray = subset.elements.map {dfdyRef![Int($0.y), Int($0.x)]}
-            let dfdy =  Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdyArray )
+//            let dfdyArray = subset.elements.map {dfdyRef![Int($0.y), Int($0.x)]}
+//            let dfdy =  Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdyArray )
             dfdyRoi[ii] = dfdy
             
-            let dfdxArray = subset.elements.map {dfdxRef![Int($0.y), Int($0.x)]}
-            let dfdx = Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdxArray )
+//            let dfdxArray = subset.elements.map {dfdxRef![Int($0.y), Int($0.x)]}
+//            let dfdx = Matrix<Double>(rows: gridCount, columns: gridCount, grid: dfdxArray )
             dfdxRoi[ii] = dfdx
       
             dfdudyRoi[ii] = dfdx * dy
@@ -379,7 +385,9 @@ class DICProject{
         
         dfdpRoi = [GeneralMatrix<Matrix<Double>>] (repeating: GeneralMatrix<Matrix<Double>>(rows: gridCount, columns: gridCount, elements: [Matrix<Double>](repeating: Matrix<Double>(arrayLiteral: [0, 0, 0, 0, 0, 0]), count: gridCount*gridCount)), count: roiPoints!.count)
         
-        let roiTaskGroup = ROITaskGroup(roiPoints: roiPoints!, roiSubsets: roiSubsets!, reference: reference!, halfSize: configure.subSize/2, dfdxRef: dfdxRef!, dfdyRef: dfdyRef!)
+        let roiTaskGroup = ROITaskGroup(roiPoints: roiPoints!,
+//                                        roiSubsets: roiSubsets!,
+                                        reference: reference!, halfSize: configure.subSize/2, dfdxRef: dfdxRef!, dfdyRef: dfdyRef!)
         
        
         guard let hessan = try? await roiTaskGroup.calculateHassien(),
@@ -395,7 +403,7 @@ class DICProject{
     }
     
     
-    public func preComputeCur(index: Int) throws{
+    public func preComputeCur(_ index: Int) throws{
         precondition(hessanRoi != nil)
         if reference!.isFftable(){
             currentMap = InterpolatedMap(gs: currents![index]).qkCqkt()
@@ -407,7 +415,7 @@ class DICProject{
         
     }
     
-    public func preComputeCurAsync(index: Int) async throws{
+    public func preComputeCurAsync(_ index: Int) async throws{
         precondition(hessanRoi != nil)
         if reference!.isFftable(){
             currentMap = try await InterpolatedMap(gs: currents![index]).qkCqktAsync()
@@ -421,14 +429,14 @@ class DICProject{
     
     
     
-    public func iterativeSearch(initialGuess:[Double]) throws{
+    public func iterativeSearch(_ index: Int) throws{
         //MARK: intialGuess = [u, v, du/dx, du/dy, dv/dx, dv/dy]
-        precondition(initialGuess.count == 6)
+//        precondition(initialGuess.count == 6)
         if deformVectorRoi == nil{
             deformVectorRoi = [[[Double]]]()
         }
         
-        var guess = initialGuess
+        var guess:[Double] = [0,0,0,0,0,0]
         var deformVector = [[Double]](repeating:[Double](repeating: 0.0, count: 6), count: roiPoints!.count)
         
         let halfsize = configure.subSize/2
@@ -436,32 +444,39 @@ class DICProject{
         
         let y0 = roiPoints![0].y
         let x0 = roiPoints![0].x
-        
+//        print(y0, x0)
         let templ = reference![y0-halfsize...y0+halfsize, x0-halfsize...x0+halfsize]
-        let (initial_y, initial_x) = normalizedCrossCorrelation(lhs: templ, rhs: currents![0])
+        let (initial_y, initial_x) = normalizedCrossCorrelation(lhs: templ, rhs: currents![index])
         guess[0] = Double(initial_x-x0)
         guess[1] = Double(initial_y-y0)
         
         for ii in 0 ..< roiPoints!.count{
             let center = roiPoints![ii]
-            let subset = roiSubsets![ii]
+            let subset = reference![center.y-halfsize...center.y+halfsize, center.x-halfsize...center.x+halfsize]
             
-            
-            guard subset.isIntSubset
-            else{
-                throw fatalError("reference is not a Int subset")
-            }
+//            guard subset.isIntSubset
+//            else{
+//                throw fatalError("reference is not a Int subset")
+//            }
 
-            let ys = subset.ys
-            let xs = subset.xs
-            let dy = ys - Double(center.y)
-            let dx = xs - Double(center.x)
+//            let ys = subset.ys
+//            let xs = subset.xs
+//            let dy = ys - Double(center.y)
+//            let dx = xs - Double(center.x)
+            
+            let dx = Matrix<Double>.hValues(halfsize: gridCount/2)
+            let dy = transpose(dx)
+            let ys = dy + Double(center.y)
+            let xs = dx + Double(center.x)
             
             var normal:Double = 1.0
             var coef:Double = 1000.0
+            
+            let normSubset = normalize(subset)
+            let diff = subset - mean(subset)
         
             var loops = 0
-            while normal > 1e-4 && coef > 1e-2 && loops <= 500{
+            while normal > 1e-3 && coef > 1e-2 && loops <= 200{
                 let newXs = (xs + guess[0] + guess[2] * dx + guess[3] * dy).reduce([]) { partialResult, row in
                     partialResult + row.map{$0}
                 }
@@ -478,7 +493,7 @@ class DICProject{
                           Int(value) >= 0 && Int(value) < currentMap!.rows
                       })
                 else{
-                    loops = 501
+//                    loops = 501
                     continue
                 }
                 
@@ -486,7 +501,7 @@ class DICProject{
                 
                 let deformSubset = GeneralMatrix<SubPixel>(rows: gridCount, columns: gridCount, elements: deformList)
                 
-                let normalizedDiff = normalize(subset.values()) - normalize(deformSubset.values())
+                let normalizedDiff = normSubset - normalize(deformSubset.values())
                 
                 coef = sum(pow(normalizedDiff, 2))
                 
@@ -495,8 +510,6 @@ class DICProject{
                     gradient +=  normalizedDiff[row, column] * dfdpRoi![ii][row, column]
                 }
                 
-
-                let diff = subset.values() - mean(subset.values())
                 let value: Double = sum(pow(diff, 2))
                 gradient = gradient * (-2) / sqrt(value)
                 
@@ -514,97 +527,61 @@ class DICProject{
                 guess = [wNew[0,2], wNew[1,2], wNew[0,0]-1, wNew[0,1], wNew[1,0], wNew[1,1]-1]
                 normal = sqrt(detlaP.reduce(0.0, {$0 + pow($1, 2)}))
                 loops += 1
-//                print(coef)
+                
                 
             }
-            if loops >= 500{
-                deformVector[ii] = [0, 0 ,0, 0 ,0, 0]
-            }
-            else{
-                deformVector[ii] = guess
-            }
+
+            deformVector[ii] = guess
+            
+//            sleep(1)
+
         }
-        deformVectorRoi!.append(deformVector)
         
+        deformVectorRoi!.append(deformVector)
         print(deformVector)
-      
     }
     
-    public func iterativeSearchAsync(initialGuess:[Double]) async throws{
+    public func iterativeSearchAsync(_ index: Int) async throws{
         //MARK: intialGuess = [u, v, du/dx, du/dy, dv/dx, dv/dy]
-        precondition(initialGuess.count == 6)
+      
         var guesses: [[Double]]
         let halfsize = configure.subSize/2
         let gridCount = configure.subSize
         
-        if deformVectorRoi == nil{
-            deformVectorRoi = [[[Double]]]()
-            
-            let y0 = roiPoints![0].y
-            let x0 = roiPoints![0].x
-            
-            let templ = reference![y0-halfsize...y0+halfsize, x0-halfsize...x0+halfsize]
-            let (initial_y, initial_x) = normalizedCrossCorrelation(lhs: templ, rhs: currents![0])
         
-            guesses = [[Double]](repeating: [Double(initial_x-x0), Double(initial_y-y0), 0,0,0,0], count: roiSubsets!.count)
-            print(initial_x-x0,initial_y-y0)
-        }
+        let y0 = roiPoints![0].y
+        let x0 = roiPoints![0].x
         
-        else{
-            guesses = deformVectorRoi!.last!
-        }
         
-        let deformVectorActor = DeformVectorsActor(deformatVectors: guesses)
+        let templ = reference![y0-halfsize...y0+halfsize, x0-halfsize...x0+halfsize]
+        let (initial_y, initial_x) = normalizedCrossCorrelation(lhs: templ, rhs: currents![index])
+        guesses = [[Double]](repeating: [Double(initial_x-x0), Double(initial_y-y0), 0,0,0,0], count: roiPoints!.count)
+     
+        let deformVectorActor = VectorsActor(vectors: guesses)
        
         let currentM = currentMap!
         await withThrowingTaskGroup(of: Void.self) { group in
             for ii in 0 ..< roiPoints!.count{
                 let center = roiPoints![ii]
-                let subset = roiSubsets![ii]
+//                let subset = roiSubsets![ii]
                 let dfdp = dfdpRoi![ii]
                 let hessen = hessanRoi![ii]
                 let guess = guesses[ii]
+                let subset = reference![center.y-halfsize...center.y+halfsize, center.x-halfsize...center.x + halfsize]
                 
                 group.addTask {
-                    let value = try await roiIterative(initialGuess: guess, center: center, subset: subset, dfdp: dfdp, hassien: hessen, currentMap: currentM, gridCount: gridCount)
+                    let value = try await roiIterative(initialGuess: guess, center: center,
+                                                       subset: subset,
+                                                       dfdp: dfdp, hassien: hessen, currentMap: currentM, gridCount: gridCount)
                     await deformVectorActor.setValueByIndex(index: ii, value: value)
+//                    sleep(1)
+                    
                 }
             }
 
         }
-        
-        await deformVectorRoi!.append(deformVectorActor.toArray())
-        
-//        await print(deformVectorActor.toArray())
+        print(await deformVectorActor.toArray())
     }
-}
-    
-    
-
-struct DICConfigure{
-    let subSize: Int
-    let step: Int
-    
 }
 
 
-actor ROISubset{
-    var roiSubsets: [GeneralMatrix<SubPixel>]
-    init(roiSubsets: [GeneralMatrix<SubPixel>]){
-        self.roiSubsets = roiSubsets
-    }
-    
-    init(count: Int, gridCount: Int){
-        roiSubsets = [GeneralMatrix<SubPixel>](repeating: .init(rows: gridCount,
-                                                                columns: gridCount,
-                                                                elements: .init(repeating: .init(), count: gridCount*gridCount)), count: count)
-    }
-    
-    public func setValueByIndex(index: Int, value: GeneralMatrix<SubPixel>){
-        roiSubsets[index] = value
-    }
-    
-    public func toArray()  -> [GeneralMatrix<SubPixel>] {
-        roiSubsets
-    }
-}
