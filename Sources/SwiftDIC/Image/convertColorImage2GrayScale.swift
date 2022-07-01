@@ -9,6 +9,9 @@ import Accelerate
 import Surge
 
 
+@available(iOS 13.0, *)
+@available(iOS 13.0, *)
+@available(iOS 13.0, *)
 @available(macOS 10.15, *)
 public func convertColorImage2GrayScaleMatrix(cgImage: CGImage) throws -> Matrix<Double>?
 {

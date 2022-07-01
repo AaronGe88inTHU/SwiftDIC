@@ -8,6 +8,7 @@ import Surge
 import Accelerate
 import Algorithms
 
+@available(iOS 13.0.0, *)
 @available(macOS 10.15, *)
 func roiIterative(initialGuess:[Double],
                   center: (y:Int, x:Int),
@@ -88,7 +89,7 @@ func roiIterative(initialGuess:[Double],
         loops += 1
     }
     
-    return guess
+    return guess 
 
 }
 

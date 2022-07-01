@@ -10,7 +10,7 @@ import Accelerate
 
 @available(iOS 15.0, *)
 @available(macOS 12.0, *)
-public func Interpolate1D (vector: [Double], length: Int,
+public func interpolate1D (vector: [Double], length: Int,
                            kernal: ([Double], [Double])) -> [Double]{
     var rowFft: ([Double], [Double]) = dft(vector)!
 

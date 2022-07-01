@@ -390,8 +390,7 @@ class DICProject{
                                         reference: reference!, halfSize: configure.subSize/2, dfdxRef: dfdxRef!, dfdyRef: dfdyRef!)
         
        
-        guard let hessan = try? await roiTaskGroup.calculateHassien(),
-              let dfdp = try? await roiTaskGroup.dfdp
+        guard let (hessan, dfdp) = try? await roiTaskGroup.calculateHassien()
                 
         else{
             throw fatalError()
@@ -537,7 +536,7 @@ class DICProject{
 
         }
         
-        deformVectorRoi!.append(deformVector)
+//        deformVectorRoi!.append(deformVector)
         print(deformVector)
     }
     
@@ -580,7 +579,7 @@ class DICProject{
             }
 
         }
-        print(await deformVectorActor.toArray())
+//        print(await deformVectorActor.toArray())
     }
 }
 

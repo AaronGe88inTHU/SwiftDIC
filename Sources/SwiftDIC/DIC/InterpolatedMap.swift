@@ -173,7 +173,7 @@ struct InterpolatedMap{
             for ii in 0 ..< height{
                 let row = gs[row: ii]
                 group.addTask {
-                    let value = Interpolate1D(vector: row, length: gs.columns, kernal: kernal_b_x_fft)
+                    let value = interpolate1D(vector: row, length: gs.columns, kernal: kernal_b_x_fft)
                     await rowResults.setValueByIndex(index: ii, value: value)
                 }
             }
@@ -191,7 +191,7 @@ struct InterpolatedMap{
             for ii in 0 ..< width{
                 let column = coef[column: ii]
                 group.addTask {
-                    let value = Interpolate1D(vector: column, length: gs.rows, kernal: kernal_b_y_fft)
+                    let value = interpolate1D(vector: column, length: gs.rows, kernal: kernal_b_y_fft)
                     await columnResults.setValueByIndex(index: ii, value: value)
                 }
             }

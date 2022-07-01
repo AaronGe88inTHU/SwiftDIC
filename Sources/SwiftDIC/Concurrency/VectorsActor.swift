@@ -7,8 +7,10 @@
 
 import Foundation
 
+@available(macOS 10.15.0, *)
+@available(iOS 13.0.0, *)
 actor VectorsActor{
-    var vectors : [[Double]]
+    private var vectors : [[Double]]
     init(count: Int, length: Int) {
         vectors = [[Double]](repeating: .init(repeating: 0, count: length), count: count)
     }

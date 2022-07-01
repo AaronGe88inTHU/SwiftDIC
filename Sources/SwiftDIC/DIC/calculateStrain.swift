@@ -7,26 +7,60 @@
 
 import Surge
 import Accelerate
+import Algorithms
 
-
+@available(iOS 13.0.0, *)
 @available(macOS 10.15, *)
-public func calculateStrain(dv: [Double], current: Matrix<Double>, halfsize: Int, step: Int) async throws ->[Double]{
-    let h = Matrix<Double>.hValues(halfsize: halfsize)
+public func calculateStrain(dv: [Double], halfsize: Int, step: Int) async throws ->(exx: Double, eyy: Double, exy: Double){
+    
+    let countGrid = halfsize*2+1
+    let h = Matrix<Double>.hValues(halfsize: halfsize) / Double(countGrid*countGrid*(halfsize+1)*halfsize*step)
+        
+    let hArray = h.reduce([]) {
+        $0 + $1
+    }
     
     let ht = transpose(h)
-    return [0]
+    let htArray = ht.reduce([]) {
+        $0 + $1
+    }
+    
+    var u = Matrix<Double>(rows: countGrid, columns:  countGrid, repeatedValue: 0)
+    var v = Matrix<Double>(rows: countGrid, columns:  countGrid, repeatedValue: 0)
+    
     
 //    let newXs = dv[0] + dv[2] * h
-////    for (dy, dx) in (-halfsize...halfsize, -halfsize...halfsize)
-////            let newXs = (guess[0] + guess[2] * dx + guess[3] * dy).reduce([]) { partialResult, row in
-////        partialResult + row.map{$0}
-////    }
-//}
+    for (dy, dx) in product(-halfsize...halfsize, -halfsize...halfsize){
+        u[dy+halfsize, dx+halfsize] = dv[0] + dv[2] * Double(dx) + dv[3] * Double(dy)
+        v[dy+halfsize, dx+halfsize] = dv[1] + dv[4] * Double(dx) + dv[5] * Double(dy)
+    }
+    
+    let uArray = u.reduce([]) {$0 + $1}
+    let vArray = v.reduce([]) {$0 + $1}
+    
 //
-//    let newYs = (ys + guess[1] + guess[4] * dx + guess[5] * dy).reduce([]) { partialResult, row in
-//        partialResult + row.map{ $0}
-//    }
-//
-//    vDSP.convolve(v.reduce([]) {$0  + $1}, rowCount: v.rows, columnCount: v.columns,
-//                  withKernel: h.reduce([]) {$0 + $1}, kernelRowCount: h.rows, kernelColumnCount: h.columns)
+    let exx = vDSP.convolve(uArray, rowCount: countGrid, columnCount: countGrid,
+                            withKernel: hArray, kernelRowCount:countGrid, kernelColumnCount: countGrid).first {
+        $0 != 0
+    } ?? 0.0
+    
+    let eyy = vDSP.convolve(vArray, rowCount: countGrid, columnCount: countGrid,
+                            withKernel: hArray, kernelRowCount:countGrid, kernelColumnCount: countGrid).first {
+        $0 != 0
+    } ?? 0.0
+    
+    let dudy = vDSP.convolve(uArray, rowCount: countGrid, columnCount: countGrid,
+                            withKernel: htArray, kernelRowCount:countGrid, kernelColumnCount: countGrid).first {
+        $0 != 0
+        
+    } ?? 0.0
+    
+    let dvdx = vDSP.convolve(vArray, rowCount: countGrid, columnCount: countGrid,
+                            withKernel: htArray, kernelRowCount:countGrid, kernelColumnCount: countGrid).first {
+        $0 != 0
+    } ?? 0.0
+    
+    let exy = dudy + dvdx
+    
+    return (exx, eyy, exy)
 }

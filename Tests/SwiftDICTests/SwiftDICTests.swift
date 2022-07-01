@@ -281,6 +281,14 @@ final class SwiftDICTests: XCTestCase {
         //
     }
     
+    func test_calculateStrain() async throws{
+        let dv = [0.0001828724770964685, -4.999033287571219, -0.00010075760204319995, 8.933745600655469e-05, -1.3805827364658803e-05, -3.207186813691809e-05]
+        
+        let v = try await calculateStrain(dv: dv, halfsize: 10, step: 10)
+        
+        
+    }
+    
 
     
     func test_iterativeComputeAsync() async throws{
@@ -329,6 +337,8 @@ final class SwiftDICTests: XCTestCase {
         
 
     }
+    
+    
     
     
     

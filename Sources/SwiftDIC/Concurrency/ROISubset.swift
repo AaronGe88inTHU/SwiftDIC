@@ -7,6 +7,8 @@
 
 import Foundation
 
+@available(macOS 10.15.0, *)
+@available(iOS 13.0.0, *)
 actor ROISubset{
     var roiSubsets: [GeneralMatrix<SubPixel>]
     init(roiSubsets: [GeneralMatrix<SubPixel>]){
