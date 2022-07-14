@@ -10,16 +10,10 @@ import Surge
 import Accelerate
 import Algorithms
 
-/// Implement of  Zhongjie Cui et al 2020 J. Phys.: Conf. Ser. 1693 012163
-@available(macOS 10.15, *)
-
 
 @available(iOS 13.0, *)
 @available(macOS 10.15, *)
 
-
-@available(iOS 13.0, *)
-@available(macOS 10.15, *)
 public func templateMatch(templ: Matrix<Double>, image: Matrix<Double>) -> (row: Int, column: Int){
     precondition(image.rows >= templ.rows && image.columns >= templ.columns)
 
